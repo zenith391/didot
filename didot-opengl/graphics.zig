@@ -115,7 +115,7 @@ const GameObject = objects.GameObject;
 const Camera = objects.Camera;
 
 // renderScene is here as it uses graphics API-dependent code (it's the rendering part afterall)
-pub fn renderScene(scene: *Scene, window: Window) void {
+pub fn renderScene(scene: *const Scene, window: Window) void {
     const size = window.getSize();
     c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
     c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);

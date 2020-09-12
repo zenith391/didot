@@ -55,8 +55,8 @@ pub const GameObject = struct {
         try self.childrens.append(go);
     }
 
-    pub fn deinit(self: *GameObject) void {
-
+    pub fn deinit(self: *const GameObject) void {
+        self.childrens.deinit();
     }
 };
 
@@ -82,7 +82,7 @@ pub const Camera = struct {
 
     }
 
-    pub fn deinit(self: *Camera) void {
+    pub fn deinit(self: *const Camera) void {
         self.gameObject.deinit();
     }
 };
@@ -117,7 +117,7 @@ pub const Scene = struct {
         try self.gameObject.add(go);
     }
 
-    pub fn deinit(self: *Scene) void {
+    pub fn deinit(self: *const Scene) void {
         self.gameObject.deinit();
     }
 };

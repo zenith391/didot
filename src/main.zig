@@ -1,11 +1,7 @@
 const std = @import("std");
-const zlm = @import("zlm");
 
 const graphics = @import("didot-graphics");
-//const image = @import("didot-image");
 const objects = @import("didot-objects");
-
-//const bmp = image.bmp;
 
 const Texture = graphics.Texture;
 const Window = graphics.Window;
@@ -13,8 +9,6 @@ const ShaderProgram = graphics.ShaderProgram;
 
 const Scene = objects.Scene;
 const Camera = objects.Camera;
-
-const warn = std.debug.warn;
 
 // OpenGL and GLFW code
 pub fn main() !void {

@@ -15,7 +15,7 @@ pub fn addEngineToExe(step: *LibExeObjStep) void {
     const graphics = Pkg {
         .name = "didot-graphics",
         .path = "didot-opengl/graphics.zig",
-        .dependencies = ([_]Pkg{image})[0..]
+        .dependencies = ([_]Pkg{zlm,image})[0..]
     };
     const objects = Pkg {
         .name = "didot-objects",

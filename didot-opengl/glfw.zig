@@ -1,6 +1,8 @@
 const c = @import("c.zig");
 const WindowError = @import("graphics.zig").WindowError;
 const std = @import("std");
+const zlm = @import("zlm");
+const Vec2 = zlm.Vec2;
 
 pub const Window = struct {
     nativeId: *c.GLFWwindow,
@@ -28,6 +30,13 @@ pub const Window = struct {
         return Window {
             .nativeId = window
         };
+    }
+
+    pub fn getSize(self: *const Window) Vec2 {
+        var width: i32 = 0;
+        var height: i32 = 0;
+        c.glfwGetFramebufferSize(self.nativeId, &width, &height);
+        return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
     }
 
     /// Poll events and swap buffer

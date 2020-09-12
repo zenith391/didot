@@ -1,21 +1,25 @@
 const c = @import("c.zig");
 const std = @import("std");
+const zlm = @import("zlm");
 
 pub const ShaderError = error {
     UnknownShaderError
 };
 
 pub const Mesh = struct {
-    /// Meshes are lazily loaded and path is used when mesh must be loaded
-    path: []const u8,
+    /// Meshes can be lazily loaded and path is used when a mesh must be loaded
+    path: ?[]const u8 = null,
     
     /// Whether the model has been loaded or not.
-    loaded: bool,
+    loaded: bool = true,
 
     // OpenGL related variables
     vao: c.GLuint,
     vbo: c.GLuint,
-    ebo: c.GLuint
+    ebo: c.GLuint,
+
+    /// how many elements this Mesh has
+    elements: usize,
 };
 
 pub const ShaderProgram = struct {
@@ -51,11 +55,11 @@ pub const ShaderProgram = struct {
     }
 
     /// Set an OpenGL uniform to the following 4D matrix.
-    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, program: c.GLuint, mat: Mat4) void {
-        var uniform = c.glGetUniformLocation(program, name);
+    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, mat: zlm.Mat4) void {
+        var uniform = c.glGetUniformLocation(self.id, name);
 
         var m = mat.fields;
-        const columns: [16]f32 = .{
+        const columns: [16]f32 = .{ // put the matrix in the order OpenGL wants it to be
             m[0][0], m[0][1], m[0][2], m[0][3],
             m[1][0], m[1][1], m[1][2], m[1][3],
             m[2][0], m[2][1], m[2][2], m[2][3],
@@ -104,5 +108,52 @@ pub const Texture = struct {
 pub const WindowError = error {
     InitializationError
 };
+
+const objects = @import("../didot-objects/objects.zig"); // hacky hack til i found a way for graphics to depend on objects
+const Scene = objects.Scene;
+const GameObject = objects.GameObject;
+const Camera = objects.Camera;
+
+// renderScene is here as it uses graphics API-dependent code (it's the rendering part afterall)
+pub fn renderScene(scene: *Scene, window: Window) void {
+    const size = window.getSize();
+    c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
+    c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
+    
+    if (scene.camera) |camera| {
+        var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.001, 100);
+        camera.shader.setUniformMat4("projMatrix", projMatrix);
+
+        // create the direction vector to be used with the view matrix.
+        var direction = zlm.Vec3.new(
+            @cos(camera.yaw) * @cos(camera.pitch),
+            @sin(camera.pitch),
+            @sin(camera.yaw) * @cos(camera.pitch)
+        );
+
+        var viewMatrix = zlm.Mat4.createLook(
+            camera.position,
+            direction,
+            zlm.Vec3.new(0.0, 1.0, 0.0)
+        );
+        camera.shader.setUniformMat4("viewMatrix", viewMatrix);
+
+        renderObject(scene.gameObject, camera);
+    }
+}
+
+fn renderObject(gameObject: GameObject, camera: *Camera) void {
+    if (gameObject.mesh) |mesh| {
+        c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vbo);
+        c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        camera.shader.setUniformMat4("modelMatrix", gameObject.matrix);
+        c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
+    }
+
+    var childs = gameObject.childrens;
+    for (childs.items) |child| {
+        renderObject(child, camera);
+    }
+}
 
 usingnamespace @import("glfw.zig");

@@ -1,11 +1,39 @@
 const std = @import("std");
 const Builder = std.build.Builder;
 const LibExeObjStep = std.build.LibExeObjStep;
+const Pkg = std.build.Pkg;
 
-pub fn buildEngine(step: *LibExeObjStep) void {
-    step.addPackage(.{ .name = "zlm", .path = "zlm/zlm.zig" });
-    step.addPackage(.{ .name = "didot-graphics", .path = "didot-graphics/graphics.zig"});
-    step.addPackage(.{ .name = "didot-image", .path = "didot-image/image.zig"});
+pub fn addEngineToExe(step: *LibExeObjStep) void {
+    const zlm = Pkg {
+        .name = "zlm",
+        .path = "zlm/zlm.zig"
+    };
+    const image = Pkg {
+        .name = "didot-image",
+        .path = "didot-image/image.zig"
+    };
+    const graphics = Pkg {
+        .name = "didot-graphics",
+        .path = "didot-opengl/graphics.zig",
+        .dependencies = ([_]Pkg{image})[0..]
+    };
+    const objects = Pkg {
+        .name = "didot-objects",
+        .path = "didot-objects/objects.zig",
+        .dependencies = ([_]Pkg{zlm,graphics})[0..]
+    };
+    const app = Pkg {
+        .name = "didot-app",
+        .path = "didot-app/app.zig",
+        .dependencies = ([_]Pkg{objects,graphics})[0..]
+    };
+
+    step.addPackage(zlm);
+    step.addPackage(image);
+    step.addPackage(graphics);
+    step.addPackage(objects);
+    step.addPackage(app);
+
     step.linkSystemLibrary("glfw");
     step.linkSystemLibrary("c");
     step.linkSystemLibrary("GL");
@@ -18,7 +46,7 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("didot-test", "src/main.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
-    buildEngine(exe);
+    addEngineToExe(exe);
     exe.install();
 
     const run_cmd = exe.run();

@@ -1,4 +1,3 @@
-pub const Real = f32;
 const c = @import("c.zig");
 const std = @import("std");
 
@@ -17,13 +16,6 @@ pub const Mesh = struct {
     vao: c.GLuint,
     vbo: c.GLuint,
     ebo: c.GLuint
-};
-
-pub const Camera = struct {
-    fov: Real,
-    position: Vec3,
-    yaw: Real = zlm.toRadians(-90.0),
-    pitch: Real = 0
 };
 
 pub const ShaderProgram = struct {
@@ -87,7 +79,7 @@ pub const ShaderProgram = struct {
     }
 };
 
-pub const Image = @import("../didot-image/image.zig").Image; // dirty workaround! TODO: find better workaround
+pub const Image = @import("didot-image").Image;
 
 pub const Texture = struct {
     id: c.GLuint,
@@ -104,7 +96,6 @@ pub const Texture = struct {
             0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
         return Texture {
             .id = id
-            
         };
     }
 

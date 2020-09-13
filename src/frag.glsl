@@ -4,8 +4,12 @@ in vec2 texCoord;
 out vec4 outColor;
 
 uniform sampler2D tex;
+uniform bool useTex;
 
 void main() {
-	outColor = texture(tex, texCoord);
-	//outColor = vec4(0.6, 0.7, 0.4, 1.0);
+	if (useTex) {
+		outColor = texture(tex, texCoord);
+	} else {
+		outColor = vec4(0.7, 0.7, 0.7, 1.0);
+	}
 }

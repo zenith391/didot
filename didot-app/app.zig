@@ -14,6 +14,7 @@ pub const Application = struct {
         var window = try Window.create();
         self.scene = scene;
         self.window = window;
+        objects.initPrimitives();
     }
 
     pub fn loop(self: *Application) void {

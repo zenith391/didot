@@ -22,4 +22,5 @@ pub extern fn glGetShaderiv(shader: GLuint, pname: GLenum, params: *GLint) void;
 pub extern fn glEnableVertexAttribArray(index: GLuint) void;
 pub extern fn glGetShaderInfoLog(shader: GLuint, maxLength: GLsizei, length: *GLsizei, infoLog: [*]GLchar) void;
 pub extern fn glGetUniformLocation(shader: GLuint, name: [*:0]const GLchar) GLint;
+pub extern fn glUniform1i(location: GLint, v0: GLint) void;
 pub extern fn glUniformMatrix4fv(location: GLint, count: GLsizei, transpose: GLboolean, value: *const GLfloat) void;

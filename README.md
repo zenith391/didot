@@ -25,7 +25,6 @@ const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
 
-// OpenGL and GLFW code
 pub fn main() !void {
 
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -37,7 +36,6 @@ pub fn main() !void {
     var app = Application {};
     try app.init(scene);
 
-    objects.initPrimitives();
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
 
     var camera = try Camera.create(allocator, shader);
@@ -57,3 +55,29 @@ pub fn main() !void {
 That is where you can see it's not 100% true that zero porting is necessary, if you use some other backend that doesn't accept GLSL, you'll have to rewrite the shaders.
 
 It's done this way because making a universal shader language is hard and would also bloat the engine.
+
+And to make that into a textured cube, only a few lines are necessary:
+```zig
+var img = try bmp.read_bmp(allocator, "grass.bmp");
+var tex = Texture.create(img);
+var material = Material {
+    .texture = tex
+};
+plane.material = material;
+```
+
+## How to use
+
+Just add this to your build script:
+```
+const engine = @import("path/to/engine/build.zig");
+
+pub fn build(b: *Builder) {
+    // your code ...
+    addEngineToExe(exe);
+    // more code ...
+}
+```
+Where `exe` is a `LibExeObjStep` (made by `b.addExecutable`).
+
+And now Didot is ready for use!

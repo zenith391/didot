@@ -1,8 +1,10 @@
 const graphics = @import("didot-graphics");
 const zlm = @import("zlm");
 const std = @import("std");
+
 const Mesh = graphics.Mesh;
 const Window = graphics.Window;
+const Material = graphics.Material;
 const Allocator = std.mem.Allocator;
 
 pub const GameObjectArrayList = std.ArrayList(GameObject);
@@ -77,6 +79,7 @@ pub const GameObject = struct {
     objectType: ?[]const u8 = null,
     /// Pointer to the struct of the object owning this game object.
     objectPointer: usize = 0,
+    material: Material = Material.default,
 
     pub fn createEmpty(allocator: *Allocator) GameObject {
         var childs = GameObjectArrayList.init(allocator);

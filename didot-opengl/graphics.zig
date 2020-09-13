@@ -49,6 +49,12 @@ pub const Mesh = struct {
     }
 };
 
+pub const Material = struct {
+    texture: ?Texture = null,
+
+    pub const default = Material {};
+};
+
 pub const ShaderProgram = struct {
     id: c.GLuint,
     vao: c.GLuint,
@@ -96,7 +102,7 @@ pub const ShaderProgram = struct {
         };
     }
 
-    /// Set an OpenGL uniform to the following 4D matrix.
+    /// Set an OpenGL uniform to the following 4x4 matrix.
     pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, mat: zlm.Mat4) void {
         var uniform = c.glGetUniformLocation(self.id, name);
 
@@ -108,6 +114,14 @@ pub const ShaderProgram = struct {
             m[3][0], m[3][1], m[3][2], m[3][3]
         };
         c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, &columns[0]);
+    }
+
+    /// Set an OpenGL uniform to the following boolean matrix.
+    pub fn setUniformBool(self: *ShaderProgram, name: [:0]const u8, val: bool) void {
+        var uniform = c.glGetUniformLocation(self.id, name);
+        var v: c.GLint = 0;
+        if (val) v = 1;
+        c.glUniform1i(uniform, v);
     }
 
     pub fn checkError(shader: c.GLuint) ShaderError!void {
@@ -124,7 +138,6 @@ pub const ShaderProgram = struct {
             }
             std.debug.warn("uncorrect shader: \n", .{});
             var totalSize: usize = @intCast(usize, totalLen);
-            std.debug.warn("{}\n", .{totalSize});
             std.debug.warn("{}\n", .{buf[0..totalSize]});
             return ShaderError.UnknownShaderError;
         }
@@ -146,6 +159,7 @@ pub const Texture = struct {
         c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGBA,
             @intCast(c_int, image.width), @intCast(c_int, image.height),
             0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
+        c.glBindTexture(c.GL_TEXTURE_2D, 0);
         return Texture {
             .id = id
         };
@@ -198,6 +212,15 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
     if (gameObject.mesh) |mesh| {
         c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vao);
         c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        var material = gameObject.material;
+
+        if (material.texture) |texture| {
+            c.glBindTexture(c.GL_TEXTURE_2D, texture.id);
+            camera.shader.setUniformBool("useTex", true);
+        } else {
+            camera.shader.setUniformBool("useTex", false);
+        }
+
         var matrix = zlm.Mat4.createTranslation(gameObject.position);
         camera.shader.setUniformMat4("modelMatrix", matrix);
         c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);

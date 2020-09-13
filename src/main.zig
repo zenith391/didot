@@ -10,14 +10,13 @@ const Application = @import("didot-app").Application;
 const Texture = graphics.Texture;
 const Window = graphics.Window;
 const ShaderProgram = graphics.ShaderProgram;
+const Material = graphics.Material;
 
 const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
 
-// OpenGL and GLFW code
 pub fn main() !void {
-
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     const allocator = &arena.allocator;
@@ -27,7 +26,6 @@ pub fn main() !void {
     var app = Application {};
     try app.init(scene);
 
-    objects.initPrimitives();
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
 
     var camera = try Camera.create(allocator, shader);
@@ -36,12 +34,21 @@ pub fn main() !void {
     camera.yaw = zlm.toRadians(-120.0);
     try scene.add(camera.gameObject);
 
-    var plane = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
-    plane.position = Vec3.new(0, 0.75, -3);
-    try scene.add(plane);
-
+    var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
+    cube.position = Vec3.new(0, 0.75, -3);
     var img = try bmp.read_bmp(allocator, "grass.bmp");
     var tex = Texture.create(img);
+    var material = Material {
+        .texture = tex
+    };
+    cube.material = material;
+    try scene.add(cube);
+
+    var cube2 = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
+    cube2.position = Vec3.new(-1.2, 0.75, -3);
+    try scene.add(cube2);
+
+    var inputController = GameObject.createEmpty(allocator);
 
     app.loop();
 }

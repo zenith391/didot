@@ -3,8 +3,12 @@ const std = @import("std");
 const zlm = @import("zlm");
 
 pub const ShaderError = error {
-    UnknownShaderError
+    UnknownShaderError,
+    InvalidGLContextError
 };
+
+/// The type used for meshes's elements
+pub const MeshElementType = c.GLuint;
 
 pub const Mesh = struct {
     /// Meshes can be lazily loaded and path is used when a mesh must be loaded
@@ -14,16 +18,40 @@ pub const Mesh = struct {
     loaded: bool = true,
 
     // OpenGL related variables
-    vao: c.GLuint,
+    hasVao: bool = false,
+    vao: c.GLuint = 0,
     vbo: c.GLuint,
     ebo: c.GLuint,
 
     /// how many elements this Mesh has
     elements: usize,
+
+    pub fn create(vertices: []f32, elements: []c.GLuint) Mesh {
+        var vbo: c.GLuint = 0;
+        c.glGenBuffers(1, &vbo);
+        c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
+        c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(c_long, vertices.len*@sizeOf(f32)), vertices.ptr, c.GL_STATIC_DRAW);
+        
+        const stride = 5 * @sizeOf(f32);
+        c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, 0);
+        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
+
+        var ebo: c.GLuint = 0;
+        c.glGenBuffers(1, &ebo);
+        c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, ebo);
+        c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, vertices.len*@sizeOf(c.GLuint)), elements.ptr, c.GL_STATIC_DRAW);
+
+        return Mesh {
+            .vbo = vbo,
+            .ebo = ebo,
+            .elements = elements.len
+        };
+    }
 };
 
 pub const ShaderProgram = struct {
     id: c.GLuint,
+    vao: c.GLuint,
     vertex: c.GLuint,
     fragment: c.GLuint,
 
@@ -47,8 +75,22 @@ pub const ShaderProgram = struct {
         c.glLinkProgram(shaderProgramId);
         c.glUseProgram(shaderProgramId);
 
+        var vao: c.GLuint = 0;
+        c.glGenVertexArrays(1, &vao);
+        c.glBindVertexArray(vao);
+
+        const stride = 5 * @sizeOf(f32);
+        const posAttrib = c.glGetAttribLocation(shaderProgramId, "position");
+        c.glVertexAttribPointer(@bitCast(c.GLuint, posAttrib), 3, c.GL_FLOAT, c.GL_FALSE, stride, 0);
+        c.glEnableVertexAttribArray(@bitCast(c.GLuint, posAttrib));
+
+        const texAttrib = c.glGetAttribLocation(shaderProgramId, "texcoord");
+        c.glVertexAttribPointer(@bitCast(c.GLuint, texAttrib), 2, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
+        c.glEnableVertexAttribArray(@bitCast(c.GLuint, texAttrib));
+
         return ShaderProgram {
             .id = shaderProgramId,
+            .vao = vao,
             .vertex = vertexShader,
             .fragment = fragmentShader
         };
@@ -72,11 +114,17 @@ pub const ShaderProgram = struct {
         var status: c.GLint = undefined;
         c.glGetShaderiv(shader, c.GL_COMPILE_STATUS, &status);
         if (status != c.GL_TRUE) {
-            std.debug.warn("uncorrect shader:\n", .{});
-            var buf: [512]u8 = undefined;
-            var totalLen: c.GLsizei = undefined;
-            c.glGetShaderInfoLog(shader, 512, &totalLen, buf[0..]);
-            var totalSize: usize = @bitCast(u32, totalLen);
+            var buf: [2048]u8 = undefined;
+            var totalLen: c.GLsizei = -1;
+            c.glGetShaderInfoLog(shader, 2048, &totalLen, buf[0..]);
+            if (totalLen == -1) {
+                // the length of the infolog seems to not be set
+                // when a GL context isn't set (so when the window isn't created)
+                return ShaderError.InvalidGLContextError;
+            }
+            std.debug.warn("uncorrect shader: \n", .{});
+            var totalSize: usize = @intCast(usize, totalLen);
+            std.debug.warn("{}\n", .{totalSize});
             std.debug.warn("{}\n", .{buf[0..totalSize]});
             return ShaderError.UnknownShaderError;
         }
@@ -119,6 +167,7 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
     const size = window.getSize();
     c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
     c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
+    c.glEnable(c.GL_DEPTH_TEST);
     
     if (scene.camera) |camera| {
         var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.001, 100);
@@ -131,12 +180,15 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             @sin(camera.yaw) * @cos(camera.pitch)
         );
 
-        var viewMatrix = zlm.Mat4.createLook(
-            camera.position,
-            direction,
+        var viewMatrix = zlm.Mat4.createLookAt(
+            camera.gameObject.position,
+            camera.gameObject.position.add(direction),
             zlm.Vec3.new(0.0, 1.0, 0.0)
         );
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
+        c.glBindVertexArray(camera.shader.vao);
+        c.glEnableVertexAttribArray(0);
+        c.glEnableVertexAttribArray(1);
 
         renderObject(scene.gameObject, camera);
     }
@@ -144,9 +196,10 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
 
 fn renderObject(gameObject: GameObject, camera: *Camera) void {
     if (gameObject.mesh) |mesh| {
-        c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vbo);
+        c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vao);
         c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
-        camera.shader.setUniformMat4("modelMatrix", gameObject.matrix);
+        var matrix = zlm.Mat4.createTranslation(gameObject.position);
+        camera.shader.setUniformMat4("modelMatrix", matrix);
         c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
     }
 

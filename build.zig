@@ -22,6 +22,11 @@ pub fn addEngineToExe(step: *LibExeObjStep) void {
         .path = "didot-objects/objects.zig",
         .dependencies = ([_]Pkg{zlm,graphics})[0..]
     };
+    const models = Pkg {
+        .name = "didot-models",
+        .path = "didot-models/models.zig",
+        .dependencies = ([_]Pkg{zlm,graphics})[0..]
+    };
     const app = Pkg {
         .name = "didot-app",
         .path = "didot-app/app.zig",
@@ -32,6 +37,7 @@ pub fn addEngineToExe(step: *LibExeObjStep) void {
     step.addPackage(image);
     step.addPackage(graphics);
     step.addPackage(objects);
+    step.addPackage(models);
     step.addPackage(app);
 
     step.linkSystemLibrary("glfw");
@@ -43,7 +49,7 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("didot-test", "src/main.zig");
+    const exe = b.addExecutable("didot-example-scene", "didot-test/example-scene.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     addEngineToExe(exe);
@@ -52,6 +58,6 @@ pub fn build(b: *Builder) void {
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
 
-    const run_step = b.step("test", "Test Didot with didot-test");
+    const run_step = b.step("test", "Test Didot with didot-test/example-scene");
     run_step.dependOn(&run_cmd.step);
 }

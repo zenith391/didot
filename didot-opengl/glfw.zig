@@ -17,7 +17,7 @@ pub const Window = struct {
         c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
         c.glfwWindowHint(c.GLFW_RESIZABLE, c.GLFW_TRUE);
 
-        const nullableWindow = c.glfwCreateWindow(800, 600, "Didot Game", null, null);
+        const nullableWindow = c.glfwCreateWindow(800, 600, "", null, null);
         var window: *c.GLFWwindow = undefined;
         if (nullableWindow) |win| {
             window = win;
@@ -32,7 +32,33 @@ pub const Window = struct {
         };
     }
 
+    pub fn setSize(self: *const Window, width: u32, height: u32) void {
+        c.glfwSetWindowSize(self.nativeId, @intCast(c_int, width), @intCast(c_int, height));
+    }
+
+    pub fn setPosition(self: *const Window, x: i32, y: i32) void {
+        c.glfwSetWindowPos(self.nativeId, @intCast(c_int, x), @intCast(c_int, y));
+    }
+
+    pub fn setTitle(self: *const Window, title: [:0]const u8) void {
+        c.glfwSetWindowTitle(self.nativeId, title);
+    }
+
+    pub fn getPosition(self: *const Window) Vec2 {
+        var x: i32 = 0;
+        var y: i32 = 0;
+        c.glfwGetWindowPos(self.nativeId, &y, &x);
+        return Vec2.new(@intToFloat(f32, x), @intToFloat(f32, y));
+    }
+
     pub fn getSize(self: *const Window) Vec2 {
+        var width: i32 = 0;
+        var height: i32 = 0;
+        c.glfwGetWindowSize(self.nativeId, &width, &height);
+        return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
+    }
+
+    pub fn getFramebufferSize(self: *const Window) Vec2 {
         var width: i32 = 0;
         var height: i32 = 0;
         c.glfwGetFramebufferSize(self.nativeId, &width, &height);

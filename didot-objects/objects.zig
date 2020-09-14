@@ -68,7 +68,7 @@ pub fn initPrimitives() void {
 pub const GameObject = struct {
     mesh: ?Mesh = null,
     /// Functions called regularly depending on the updateTarget value of the Application.
-    updateFn: ?fn(delta: f32) void = null,
+    updateFn: ?fn(allocator: *Allocator, delta: f32) anyerror!void = null,
     // Model matrix
     matrix: zlm.Mat4,
     position: zlm.Vec3 = zlm.Vec3.zero,
@@ -110,6 +110,15 @@ pub const GameObject = struct {
             .objectType = customType,
             .objectPointer = ptr
         };
+    }
+
+    pub fn update(self: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
+        if (self.updateFn) |func| {
+            try func(allocator, delta);
+        }
+        for (self.childrens.items) |*child| {
+            try child.update(allocator, delta); // TODO: correctly handle errors
+        }
     }
 
     pub fn add(self: *GameObject, go: GameObject) !void {

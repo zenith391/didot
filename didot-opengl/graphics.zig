@@ -167,10 +167,6 @@ pub const Texture = struct {
 
 };
 
-pub const WindowError = error {
-    InitializationError
-};
-
 const objects = @import("../didot-objects/objects.zig"); // hacky hack til i found a way for graphics to depend on objects
 const Scene = objects.Scene;
 const GameObject = objects.GameObject;
@@ -178,7 +174,7 @@ const Camera = objects.Camera;
 
 // renderScene is here as it uses graphics API-dependent code (it's the rendering part afterall)
 pub fn renderScene(scene: *const Scene, window: Window) void {
-    const size = window.getSize();
+    const size = window.getFramebufferSize();
     c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
     c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
     c.glEnable(c.GL_DEPTH_TEST);
@@ -200,9 +196,9 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             zlm.Vec3.new(0.0, 1.0, 0.0)
         );
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
-        c.glBindVertexArray(camera.shader.vao);
-        c.glEnableVertexAttribArray(0);
-        c.glEnableVertexAttribArray(1);
+        //c.glBindVertexArray(camera.shader.vao);
+        //c.glEnableVertexAttribArray(0);
+        //c.glEnableVertexAttribArray(1);
 
         renderObject(scene.gameObject, camera);
     }
@@ -231,5 +227,9 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
         renderObject(child, camera);
     }
 }
+
+pub const WindowError = error {
+    InitializationError
+};
 
 usingnamespace @import("glfw.zig");

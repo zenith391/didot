@@ -8,7 +8,7 @@ pub const Image = struct {
     height: usize,
 
     pub fn deinit(self: *Image) void {
-        if (allocator != null) {
+        if (self.allocator) |allocator| {
             allocator.free(self.data);
         }
     }

@@ -66,15 +66,20 @@ var material = Material {
 plane.material = material;
 ```
 
+Last example, a scene with a cube + a textured cube and a camera mover script:
+```zig
+
+```
+
 ## How to use
 
 Just add this to your build script:
-```
+```zig
 const engine = @import("path/to/engine/build.zig");
 
 pub fn build(b: *Builder) {
     // your code ...
-    addEngineToExe(exe);
+    engine.addEngineToExe(exe);
     // more code ...
 }
 ```

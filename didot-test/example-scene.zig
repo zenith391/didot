@@ -5,7 +5,9 @@ const Allocator = std.mem.Allocator;
 
 const graphics = @import("didot-graphics");
 const objects = @import("didot-objects");
+const models = @import("didot-models");
 const bmp = @import("didot-image").bmp;
+const obj = models.obj;
 const Application = @import("didot-app").Application;
 
 const Texture = graphics.Texture;
@@ -18,7 +20,7 @@ const Scene = objects.Scene;
 const Camera = objects.Camera;
 
 fn input(allocator: *Allocator, delta: f32) !void {
-    std.debug.warn("Input!\n", .{});
+    //std.debug.warn("Input!\n", .{});
 }
 
 fn init(allocator: *Allocator, app: *Application) !void {
@@ -47,6 +49,11 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var cube2 = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
     cube2.position = Vec3.new(-1.2, 0.75, -3);
     try scene.add(cube2);
+
+    var kartMesh = try obj.read_obj(allocator, "kart.obj");
+    var kart = GameObject.createObject(allocator, kartMesh);
+    kart.position = Vec3.new(0.7, 0.75, -5);
+    try scene.add(kart);
 }
 
 pub fn main() !void {

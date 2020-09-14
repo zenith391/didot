@@ -30,18 +30,26 @@ pub const Mesh = struct {
         var vbo: c.GLuint = 0;
         c.glGenBuffers(1, &vbo);
         c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
+        std.debug.warn("vbo: {}\n", .{vbo});
         c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(c_long, vertices.len*@sizeOf(f32)), vertices.ptr, c.GL_STATIC_DRAW);
         
         const stride = 5 * @sizeOf(f32);
+
+        var vao: c.GLuint = 0;
+        c.glGenVertexArrays(1, &vao);
+        c.glBindVertexArray(vao);
         c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, 0);
-        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
+        c.glVertexAttribPointer(1, 2, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
+        c.glEnableVertexAttribArray(0);
+        c.glEnableVertexAttribArray(1);
 
         var ebo: c.GLuint = 0;
         c.glGenBuffers(1, &ebo);
         c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, ebo);
-        c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, vertices.len*@sizeOf(c.GLuint)), elements.ptr, c.GL_STATIC_DRAW);
+        c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, elements.len*@sizeOf(c.GLuint)), elements.ptr, c.GL_STATIC_DRAW);
 
         return Mesh {
+            .vao = vao,
             .vbo = vbo,
             .ebo = ebo,
             .elements = elements.len
@@ -51,6 +59,7 @@ pub const Mesh = struct {
 
 pub const Material = struct {
     texture: ?Texture = null,
+    color: ?zlm.Vec3 = null,
 
     pub const default = Material {};
 };
@@ -116,12 +125,18 @@ pub const ShaderProgram = struct {
         c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, &columns[0]);
     }
 
-    /// Set an OpenGL uniform to the following boolean matrix.
+    /// Set an OpenGL uniform to the following boolean.
     pub fn setUniformBool(self: *ShaderProgram, name: [:0]const u8, val: bool) void {
         var uniform = c.glGetUniformLocation(self.id, name);
         var v: c.GLint = 0;
         if (val) v = 1;
         c.glUniform1i(uniform, v);
+    }
+
+    /// Set an OpenGL uniform to the following 3D float vector.
+    pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, vec: zlm.Vec3) void {
+        var uniform = c.glGetUniformLocation(self.id, name);
+        c.glUniform3f(uniform, vec.x, vec.y, vec.z);
     }
 
     pub fn checkError(shader: c.GLuint) ShaderError!void {
@@ -196,7 +211,7 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             zlm.Vec3.new(0.0, 1.0, 0.0)
         );
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
-        //c.glBindVertexArray(camera.shader.vao);
+        c.glBindVertexArray(camera.shader.vao);
         //c.glEnableVertexAttribArray(0);
         //c.glEnableVertexAttribArray(1);
 
@@ -206,8 +221,10 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
 
 fn renderObject(gameObject: GameObject, camera: *Camera) void {
     if (gameObject.mesh) |mesh| {
-        c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vao);
-        c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        //c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vbo);
+        //c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        c.glBindVertexArray(mesh.vao);
+        std.debug.warn("ebo: {}\n", .{mesh.ebo});
         var material = gameObject.material;
 
         if (material.texture) |texture| {
@@ -215,6 +232,9 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
             camera.shader.setUniformBool("useTex", true);
         } else {
             camera.shader.setUniformBool("useTex", false);
+            if (material.color) |color| {
+
+            }
         }
 
         var matrix = zlm.Mat4.createTranslation(gameObject.position);

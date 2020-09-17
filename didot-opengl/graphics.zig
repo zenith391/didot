@@ -30,7 +30,6 @@ pub const Mesh = struct {
         var vbo: c.GLuint = 0;
         c.glGenBuffers(1, &vbo);
         c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
-        std.debug.warn("vbo: {}\n", .{vbo});
         c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(c_long, vertices.len*@sizeOf(f32)), vertices.ptr, c.GL_STATIC_DRAW);
         
         const stride = 5 * @sizeOf(f32);
@@ -204,7 +203,6 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             @sin(camera.pitch),
             @sin(camera.yaw) * @cos(camera.pitch)
         );
-
         var viewMatrix = zlm.Mat4.createLookAt(
             camera.gameObject.position,
             camera.gameObject.position.add(direction),
@@ -224,7 +222,6 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
         //c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vbo);
         //c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
         c.glBindVertexArray(mesh.vao);
-        std.debug.warn("ebo: {}\n", .{mesh.ebo});
         var material = gameObject.material;
 
         if (material.texture) |texture| {

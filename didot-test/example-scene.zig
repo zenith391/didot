@@ -19,11 +19,16 @@ const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
 
-fn input(allocator: *Allocator, delta: f32) !void {
-    //std.debug.warn("Input!\n", .{});
+var win: Window = undefined;
+
+fn input(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
+    if (win.isKeyDown(graphics.KEY_W)) {
+        gameObject.*.position = Vec3.new(1, 2, 1);
+    }
 }
 
 fn init(allocator: *Allocator, app: *Application) !void {
+    win = app.window;
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
     const scene = app.scene;
 

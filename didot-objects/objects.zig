@@ -68,7 +68,7 @@ pub fn initPrimitives() void {
 pub const GameObject = struct {
     mesh: ?Mesh = null,
     /// Functions called regularly depending on the updateTarget value of the Application.
-    updateFn: ?fn(allocator: *Allocator, delta: f32) anyerror!void = null,
+    updateFn: ?fn(allocator: *Allocator, gameObject: *GameObject, delta: f32) anyerror!void = null,
     // Model matrix
     matrix: zlm.Mat4,
     position: zlm.Vec3 = zlm.Vec3.zero,
@@ -114,7 +114,7 @@ pub const GameObject = struct {
 
     pub fn update(self: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
         if (self.updateFn) |func| {
-            try func(allocator, delta);
+            try func(allocator, self, delta);
         }
         for (self.childrens.items) |*child| {
             try child.update(allocator, delta); // TODO: correctly handle errors
@@ -141,7 +141,8 @@ pub const Camera = struct {
     /// Memory is caller-owned (to free, deinit must be called then the object must be freed)
     pub fn create(allocator: *Allocator, shader: graphics.ShaderProgram) !*Camera {
         var camera = try allocator.create(Camera);
-        camera.gameObject = GameObject.createCustom(allocator, "camera", @ptrToInt(camera));
+        var go = GameObject.createCustom(allocator, "camera", @ptrToInt(camera));
+        camera.gameObject = go;
         camera.shader = shader;
         camera.fov = 70;
         camera.yaw = zlm.toRadians(-90.0);
@@ -179,6 +180,7 @@ pub const Scene = struct {
             if (child.objectType) |objectType| {
                 if (std.mem.eql(u8, objectType, "camera")) {
                     self.camera = @intToPtr(*Camera, child.objectPointer);
+                    self.camera.?.gameObject = child;
                     break;
                 }
             }

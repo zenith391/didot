@@ -65,8 +65,6 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
         }
     }
 
-    std.debug.warn("len: {}\n", .{vertices.items.len});
-
     var final = try allocator.alloc(f32, vertices.items.len*5);
     var i: usize = 0;
     for (vertices.items) |v| {

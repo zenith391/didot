@@ -22,8 +22,21 @@ const Camera = objects.Camera;
 var win: Window = undefined;
 
 fn input(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
+    const speed: f32 = 0.1 * delta;
+    const forward = gameObject.getForward();
+    const left = gameObject.getLeft();
+
     if (win.isKeyDown(graphics.KEY_W)) {
-        gameObject.*.position = Vec3.new(1, 2, 1);
+        gameObject.position = gameObject.position.add(forward.scale(speed));
+    }
+    if (win.isKeyDown(graphics.KEY_S)) {
+        gameObject.position = gameObject.position.add(forward.scale(-speed));
+    }
+    if (win.isKeyDown(graphics.KEY_A)) {
+        gameObject.position = gameObject.position.add(left.scale(speed));
+    }
+    if (win.isKeyDown(graphics.KEY_D)) {
+        gameObject.position = gameObject.position.add(left.scale(-speed));
     }
 }
 
@@ -41,8 +54,9 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
     var camera = try Camera.create(allocator, shader);
     camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
-    camera.pitch = zlm.toRadians(-15.0);
-    camera.yaw = zlm.toRadians(-120.0);
+    //camera.pitch = zlm.toRadians(-15.0);
+    //camera.yaw = zlm.toRadians(-120.0);
+    camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
     camera.gameObject.updateFn = input;
     try scene.add(camera.gameObject);
 

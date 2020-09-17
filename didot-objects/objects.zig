@@ -72,6 +72,7 @@ pub const GameObject = struct {
     // Model matrix
     matrix: zlm.Mat4,
     position: zlm.Vec3 = zlm.Vec3.zero,
+    rotation: zlm.Vec3 = zlm.Vec3.zero, // yaw, pitch, roll
     scale: zlm.Vec3 = zlm.Vec3.one,
     childrens: GameObjectArrayList,
 
@@ -121,6 +122,25 @@ pub const GameObject = struct {
         }
     }
 
+    /// This functions returns the forward (the direction) vector of this game object using its rotation.
+    pub fn getForward(self: *GameObject) zlm.Vec3 {
+        const rot = self.rotation;
+        return zlm.Vec3.new(
+            @cos(rot.x) * @cos(rot.y),
+            @sin(rot.y),
+            @sin(rot.x) * @cos(rot.y)
+        );
+    }
+
+    pub fn getLeft(self: *GameObject) zlm.Vec3 {
+        const rot = self.rotation;
+        return zlm.Vec3.new(
+            -@sin(rot.x),
+            0,
+            @cos(rot.x)
+        );
+    }
+
     pub fn add(self: *GameObject, go: GameObject) !void {
         try self.childrens.append(go);
     }
@@ -131,9 +151,7 @@ pub const GameObject = struct {
 };
 
 pub const Camera = struct {
-    fov: f32 = 70,
-    yaw: f32 = zlm.toRadians(-90.0),
-    pitch: f32 = 0,
+    fov: f32,
     gameObject: GameObject,
     viewMatrix: zlm.Mat4,
     shader: graphics.ShaderProgram,
@@ -142,12 +160,10 @@ pub const Camera = struct {
     pub fn create(allocator: *Allocator, shader: graphics.ShaderProgram) !*Camera {
         var camera = try allocator.create(Camera);
         var go = GameObject.createCustom(allocator, "camera", @ptrToInt(camera));
+        go.rotation = zlm.Vec3.new(zlm.toRadians(-90.0), 0, 0);
         camera.gameObject = go;
         camera.shader = shader;
         camera.fov = 70;
-        camera.yaw = zlm.toRadians(-90.0);
-        camera.pitch = 0;
-
         return camera;
     }
 

@@ -94,6 +94,14 @@ pub fn specializeOn(comptime Real: type) type {
                         Self.zero;
                 }
 
+                pub fn toRadians(vec: Self) Self {
+                    var result: Self = undefined;
+                    inline for (@typeInfo(Self).Struct.fields) |fld| {
+                        @field(result, fld.name) = std.math.pi * @field(vec, fld.name) / 180.0;
+                    }
+                    return result;
+                }
+
                 /// swizzle vector fields into a new vector type.
                 /// swizzle("xxx") will return a Vec3 with three times the x component.
                 /// swizzle will return a vector or scalar type with the same number of components as the

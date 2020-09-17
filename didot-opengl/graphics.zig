@@ -198,10 +198,12 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
         camera.shader.setUniformMat4("projMatrix", projMatrix);
 
         // create the direction vector to be used with the view matrix.
+        const yaw = camera.gameObject.rotation.x;
+        const pitch = camera.gameObject.rotation.y;
         var direction = zlm.Vec3.new(
-            @cos(camera.yaw) * @cos(camera.pitch),
-            @sin(camera.pitch),
-            @sin(camera.yaw) * @cos(camera.pitch)
+            @cos(yaw) * @cos(pitch),
+            @sin(pitch),
+            @sin(yaw) * @cos(pitch)
         );
         var viewMatrix = zlm.Mat4.createLookAt(
             camera.gameObject.position,

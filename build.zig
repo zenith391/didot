@@ -49,7 +49,7 @@ pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
     const mode = b.standardReleaseOptions();
 
-    const exe = b.addExecutable("didot-example-scene", "didot-test/example-scene.zig");
+    const exe = b.addExecutable("didot-example-scene", "examples/kart-and-cubes/example-scene.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
     addEngineToExe(exe);
@@ -64,7 +64,7 @@ pub fn build(b: *Builder) void {
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
 
-    const run_step = b.step("example", "Test Didot with didot-test/example-scene");
+    const run_step = b.step("example", "Test Didot with kart-and-cubes example");
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("doc", "Test and document Didot");

@@ -1,5 +1,7 @@
 # Didot 3D Engine
 
+![A kart and 2 cubes rendering with Didot](https://raw.githubusercontent.com/zenith391/didot/master/examples/kart-and-cubes.png)
+
 This engine made for Zig is aimed at high-level constructs, you manipulate game objects and meshes instead of OpenGL calls and batches.
 
 That combined with the fact the engine is in multiple packages, this means that changing the graphics module to something else is easy,

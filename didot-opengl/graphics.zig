@@ -3,7 +3,7 @@ const std = @import("std");
 const zlm = @import("zlm");
 
 pub const ShaderError = error {
-    UnknownShaderError,
+    ShaderCompileError,
     InvalidGLContextError
 };
 
@@ -168,7 +168,7 @@ pub const ShaderProgram = struct {
             std.debug.warn("uncorrect shader: \n", .{});
             var totalSize: usize = @intCast(usize, totalLen);
             std.debug.warn("{}\n", .{buf[0..totalSize]});
-            return ShaderError.UnknownShaderError;
+            return ShaderError.ShaderCompileError;
         }
     }
 };

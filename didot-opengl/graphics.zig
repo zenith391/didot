@@ -74,6 +74,7 @@ pub const Material = struct {
     texture: ?Texture = null,
     ambient: Color = Color.zero,
     diffuse: Color = Color.one,
+    specular: Color = Color.one,
 
     pub const default = Material {};
 };
@@ -227,6 +228,9 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             zlm.Vec3.new(0.0, 1.0, 0.0)
         );
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
+        camera.shader.setUniformVec3("light.position", zlm.Vec3.new(1.0, 5.0, -1.0));
+        camera.shader.setUniformVec3("light.color", zlm.Vec3.new(1.0, 1.0, 1.0));
+        camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
         renderObject(scene.gameObject, camera);
     }
 }
@@ -241,13 +245,10 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
             camera.shader.setUniformBool("useTex", true);
         } else {
             camera.shader.setUniformBool("useTex", false);
-            camera.shader.setUniformVec3("ambient", material.ambient);
         }
-        camera.shader.setUniformVec3("diffuse", material.diffuse);
-
-        camera.shader.setUniformVec3("light.position", zlm.Vec3.new(1.0, 5.0, -1.0));
-        camera.shader.setUniformVec3("light.color", zlm.Vec3.new(1.0, 1.0, 1.0));
-        camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
+        camera.shader.setUniformVec3("material.ambient", material.ambient);
+        camera.shader.setUniformVec3("material.diffuse", material.diffuse);
+        camera.shader.setUniformVec3("material.specular", material.specular);
 
         var matrix = zlm.Mat4.createTranslation(gameObject.position);
         camera.shader.setUniformMat4("modelMatrix", matrix);

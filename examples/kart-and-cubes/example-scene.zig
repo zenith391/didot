@@ -77,19 +77,35 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
     var cube2 = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
     cube2.position = Vec3.new(-1.2, 0.75, -3);
-    cube2.material.ambient = Vec3.new(0.5, 0.3, 0.4);
+    cube2.material.ambient = Vec3.new(0.2, 0.1, 0.1);
     cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
     try scene.add(cube2);
 
     var kartMesh = try obj.read_obj(allocator, "res/kart.obj");
+
     var kart = GameObject.createObject(allocator, kartMesh);
     kart.position = Vec3.new(0.7, 0.75, -5);
     try scene.add(kart);
+
+    var i: f32 = 0;
+    while (i < 5) {
+        var kart2 = GameObject.createObject(allocator, kartMesh);
+        kart2.position = Vec3.new(0.7, 0.75, -8 - (i*3));
+        try scene.add(kart2);
+        i += 1;
+    }
+
+
+    std.debug.warn("{} bytes used after init.\n", .{gp.total_requested_bytes});
 }
 
+var gp: std.heap.GeneralPurposeAllocator(.{.enable_memory_limit = true}) = undefined;
+
 pub fn main() !void {
-    var gp = std.heap.GeneralPurposeAllocator(.{}) {};
-    defer _ = gp.deinit();
+    gp = .{};
+    defer {
+        _ = gp.deinit();
+    }
     const allocator = &gp.allocator;
 
     var scene = try Scene.create(allocator);

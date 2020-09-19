@@ -128,7 +128,9 @@ pub const GameObject = struct {
     // Model matrix
     matrix: zlm.Mat4,
     position: zlm.Vec3 = zlm.Vec3.zero,
-    rotation: zlm.Vec3 = zlm.Vec3.zero, // yaw, pitch, roll
+    /// In order: yaw, pitch, roll.
+    /// Note: this will be replaced with quaternions very soon!
+    rotation: zlm.Vec3 = zlm.Vec3.zero,
     scale: zlm.Vec3 = zlm.Vec3.one,
     childrens: GameObjectArrayList,
 
@@ -209,6 +211,7 @@ pub const GameObject = struct {
         try self.childrens.append(go);
     }
 
+    /// Frees childrens array list (not childrens themselves!), the object associated to it and itself.
     pub fn deinit(self: *const GameObject) void {
         self.childrens.deinit();
         if (self.objectAllocator) |alloc| {
@@ -250,7 +253,7 @@ pub const Camera = struct {
 pub const Scene = struct {
     gameObject: GameObject,
     /// The camera the scene is currently using.
-    /// It is auto-detected at runtime before each render, by looking
+    /// It is auto-detected at runtime before each render by looking
     /// on top-level game objects to select one that corresponds
     /// to the "camera" type.
     camera: ?*Camera,

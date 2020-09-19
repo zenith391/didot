@@ -53,20 +53,28 @@ pub fn build(b: *Builder) void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
     addEngineToExe(exe);
+    //exe.single_threaded = true;
+    //exe.strip = true;
     exe.install();
 
-    const otest = b.addTest("didot.zig");
-    otest.emit_docs = true;
-    //otest.emit_bin = false;
-    otest.output_dir = "docs";
-    addEngineToExe(otest);
+    if (@hasField(LibExeObjStep, "emit_docs")) {
+        const otest = b.addTest("didot.zig");
+        otest.emit_docs = true;
+        //otest.emit_bin = false;
+        otest.output_dir = "docs";
+        addEngineToExe(otest);
+
+        const test_step = b.step("doc", "Test and document Didot");
+        test_step.dependOn(&otest.step);
+    } else {
+        const no_doc = b.addSystemCommand(&[_][]const u8{"echo", "Please build with the latest version of Zig to be able to emit documentation."});
+        const no_doc_step = b.step("doc", "Test and document Didot");
+        no_doc_step.dependOn(&no_doc.step);
+    }
 
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
 
     const run_step = b.step("example", "Test Didot with kart-and-cubes example");
     run_step.dependOn(&run_cmd.step);
-
-    const test_step = b.step("doc", "Test and document Didot");
-    test_step.dependOn(&otest.step);
 }

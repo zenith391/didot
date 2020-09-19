@@ -9,7 +9,8 @@ const OBJError = error {
 };
 
 const Element = struct {
-    posIdx: graphics.MeshElementType,
+    posIdx: usize,
+    texIdx: usize,
     normalIdx: usize
 };
 
@@ -78,7 +79,8 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
                     const texIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
                     const normalIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
                     try elements.append(.{
-                        .posIdx = @intCast(graphics.MeshElementType, posIdx-1),
+                        .posIdx = @intCast(usize, posIdx-1),
+                        .texIdx = @intCast(usize, texIdx-1),
                         .normalIdx = @intCast(usize, normalIdx-1),
                     });
                 } else {
@@ -95,6 +97,7 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
     var i: usize = 0;
     for (elements.items) |f| {
         const v = vertices.items[f.posIdx];
+        const t = texCoords.items[f.texIdx];
         const n = normals.items[f.normalIdx];
         // position
         final[i] = v.x;
@@ -105,8 +108,8 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
         final[i+4] = n.y;
         final[i+5] = n.z;
         // texture coordinate
-        final[i+6] = 0.0;
-        final[i+7] = 0.0;
+        final[i+6] = t.x;
+        final[i+7] = t.y;
         i = i + 8;
     }
 

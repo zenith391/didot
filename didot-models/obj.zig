@@ -8,6 +8,11 @@ const ArrayList = std.ArrayList;
 const OBJError = error {
 };
 
+const Element = struct {
+    posIdx: graphics.MeshElementType,
+    normalIdx: usize
+};
+
 pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
     const cwd = std.fs.cwd();
     const file = try cwd.openFile(path, .{
@@ -17,8 +22,9 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
     const reader = std.io.bufferedReader(file.reader()).reader();
 
     var vertices = ArrayList(zlm.Vec3).init(allocator);
+    var normals = ArrayList(zlm.Vec3).init(allocator);
     var texCoords = ArrayList(zlm.Vec2).init(allocator);
-    var elements = ArrayList(graphics.MeshElementType).init(allocator);
+    var elements = ArrayList(Element).init(allocator);
 
     const text = try reader.readAllAlloc(allocator, std.math.maxInt(u64));
     var linesSplit = std.mem.split(text, "\n");
@@ -47,15 +53,28 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
 
             const u = try std.fmt.parseFloat(f32, uStr);
             const v = try std.fmt.parseFloat(f32, vStr);
-            //const w = std.fmt.parseFloat(f32, wStr);
+            //const w = try std.fmt.parseFloat(f32, wStr);
             try texCoords.append(zlm.Vec2.new(u, v));
+        } else if (std.mem.eql(u8, command, "vn")) { // vertex (normal)
+            const xStr = split.next().?;
+            const yStr = split.next().?;
+            const zStr = split.next().?;
+
+            const x = try std.fmt.parseFloat(f32, xStr);
+            const y = try std.fmt.parseFloat(f32, yStr);
+            const z = try std.fmt.parseFloat(f32, zStr);
+            try normals.append(zlm.Vec3.new(x, y, z));
         } else if (std.mem.eql(u8, command, "f")) { // face
             while (true) {
                 if (split.next()) |vertex| {
                     var faceSplit = std.mem.split(vertex, "/");
                     const posIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
-                    //const pos = vertices.items[posIdx-1];
-                    try elements.append(@intCast(graphics.MeshElementType, posIdx-1));
+                    const texIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
+                    const normalIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
+                    try elements.append(.{
+                        .posIdx = @intCast(graphics.MeshElementType, posIdx-1),
+                        .normalIdx = @intCast(usize, normalIdx-1),
+                    });
                 } else {
                     break;
                 }
@@ -65,16 +84,24 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
         }
     }
 
-    var final = try allocator.alloc(f32, vertices.items.len*5);
+    var final = try allocator.alloc(f32, elements.items.len*8);
     var i: usize = 0;
-    for (vertices.items) |v| {
+    for (elements.items) |f| {
+        const v = vertices.items[f.posIdx];
+        const n = normals.items[f.normalIdx];
+        // position
         final[i] = v.x;
         final[i+1] = v.y;
         final[i+2] = v.z;
-        final[i+3] = 0.0;
-        final[i+4] = 0.0;
-        i = i + 5;
+        // normal
+        final[i+3] = n.x;
+        final[i+4] = n.y;
+        final[i+5] = n.z;
+        // texture coordinate
+        final[i+6] = 0.0;
+        final[i+7] = 0.0;
+        i = i + 8;
     }
 
-    return Mesh.create(final, elements.toOwnedSlice());
+    return Mesh.create(final, null); // TODO simplify
 }

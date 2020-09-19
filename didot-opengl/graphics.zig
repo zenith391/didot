@@ -19,39 +19,49 @@ pub const Mesh = struct {
 
     // OpenGL related variables
     hasVao: bool = false,
+    hasEbo: bool = true,
     vao: c.GLuint = 0,
     vbo: c.GLuint,
     ebo: c.GLuint,
 
     /// how many elements this Mesh has
     elements: usize,
+    vertices: usize,
 
-    pub fn create(vertices: []f32, elements: []c.GLuint) Mesh {
+    pub fn create(vertices: []f32, elements: ?[]c.GLuint) Mesh {
         var vbo: c.GLuint = 0;
         c.glGenBuffers(1, &vbo);
         c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
         c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(c_long, vertices.len*@sizeOf(f32)), vertices.ptr, c.GL_STATIC_DRAW);
         
-        const stride = 5 * @sizeOf(f32);
+        const stride = 8 * @sizeOf(f32);
 
         var vao: c.GLuint = 0;
         c.glGenVertexArrays(1, &vao);
         c.glBindVertexArray(vao);
         c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, 0);
-        c.glVertexAttribPointer(1, 2, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
+        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
+        c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, 6*@sizeOf(f32));
         c.glEnableVertexAttribArray(0);
         c.glEnableVertexAttribArray(1);
+        c.glEnableVertexAttribArray(2);
 
         var ebo: c.GLuint = 0;
-        c.glGenBuffers(1, &ebo);
-        c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, ebo);
-        c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, elements.len*@sizeOf(c.GLuint)), elements.ptr, c.GL_STATIC_DRAW);
+        var elementsSize: usize = 0;
+        if (elements) |elem| {
+            c.glGenBuffers(1, &ebo);
+            c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, ebo);
+            c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, elem.len*@sizeOf(c.GLuint)), elem.ptr, c.GL_STATIC_DRAW);
+            elementsSize = elem.len;
+        }
 
         return Mesh {
             .vao = vao,
             .vbo = vbo,
             .ebo = ebo,
-            .elements = elements.len
+            .elements = elementsSize,
+            .vertices = vertices.len,
+            .hasEbo = elements != null
         };
     }
 };
@@ -62,7 +72,8 @@ pub const Color = zlm.Vec3;
 
 pub const Material = struct {
     texture: ?Texture = null,
-    ambient: ?Color = null,
+    ambient: Color = Color.new(0.3, 0.3, 0.3),
+    diffuse: Color = Color.one,
 
     pub const default = Material {};
 };
@@ -216,18 +227,12 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             zlm.Vec3.new(0.0, 1.0, 0.0)
         );
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
-        c.glBindVertexArray(camera.shader.vao);
-        //c.glEnableVertexAttribArray(0);
-        //c.glEnableVertexAttribArray(1);
-
         renderObject(scene.gameObject, camera);
     }
 }
 
 fn renderObject(gameObject: GameObject, camera: *Camera) void {
     if (gameObject.mesh) |mesh| {
-        //c.glBindBuffer(c.GL_ARRAY_BUFFER, mesh.vbo);
-        //c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
         c.glBindVertexArray(mesh.vao);
         var material = gameObject.material;
 
@@ -236,14 +241,21 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
             camera.shader.setUniformBool("useTex", true);
         } else {
             camera.shader.setUniformBool("useTex", false);
-            if (material.ambient) |ambient| {
-
-            }
+            camera.shader.setUniformVec3("ambient", material.ambient);
         }
+        camera.shader.setUniformVec3("diffuse", material.diffuse);
+
+        camera.shader.setUniformVec3("light.position", zlm.Vec3.new(1.0, 5.0, -1.0));
+        camera.shader.setUniformVec3("light.color", zlm.Vec3.new(1.0, 1.0, 1.0));
 
         var matrix = zlm.Mat4.createTranslation(gameObject.position);
         camera.shader.setUniformMat4("modelMatrix", matrix);
-        c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
+
+        if (mesh.hasEbo) {
+            c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
+        } else {
+            c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
+        }
     }
 
     var childs = gameObject.childrens;

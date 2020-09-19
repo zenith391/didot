@@ -30,43 +30,95 @@ pub fn initPrimitives() void {
     };
     PrimitivePlaneMesh = Mesh.create(planeVert[0..], planeElem[0..]);
 
-    var cubeVert = [_]f32 {
+    // position, normal, tex coords
+    // var cubeVert = [_]f32 {
+    //     // front
+    //     -0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 0.0, // upper left
+    //     0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 0.0, // upper right
+    //     0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 1.0, 1.0, // bottom right
+    //     -0.5, -0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 1.0, // bottom left
+    //     // bottom
+    //     -0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 0.0, 0.0, // bottom left
+    //     0.5, -0.5, -0.5, 0.0, -1.0, 0.0, 1.0, 0.0, // bottom right
+    //     // right
+    //     -0.5, 0.5, -0.5, 1.0, 0.0, 1.0, 1.0, 0.0, // upper left
+    //     -0.5, -0.5, -0.5, 1.0, 0.0, -1.0, 1.0, 1.0, // bottom left
+    //     // left
+    //     0.5, 0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 0.0, // upper left
+    //     0.5, -0.5, -0.5, -1.0, 0.0, 0.0, 0.0, 1.0, // bottom left
+    //     // top
+    //     -0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 0.0, 1.0, // top left
+    //     0.5, 0.5, -0.5, 0.0, 1.0, 0.0, 1.0, 1.0, // top right
+    // };
+    // var cubeElem = [_]graphics.MeshElementType {
+    //     // front
+    //     0, 1, 3,
+    //     1, 3, 2,
+    //     // bottom
+    //     3, 2, 4,
+    //     2, 5, 4,
+    //     // right
+    //     0, 3, 6,
+    //     3, 6, 7,
+    //     // left
+    //     1, 2, 8,
+    //     2, 8, 9,
+    //     // top
+    //     0, 1, 10,
+    //     1, 11, 10,
+    // };
+
+    var cubeVert = [_]f32{
+        // back
+        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 0.0, 0.0,
+         0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 1.0, 0.0,
+         0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 1.0, 1.0,
+         0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 1.0, 1.0,
+        -0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 0.0, 0.0,
+
         // front
-        -0.5, 0.5, 0.5, 0.0, 0.0, // upper left
-        0.5, 0.5, 0.5, 1.0, 0.0, // upper right
-        0.5, -0.5, 0.5, 1.0, 1.0, // bottom right
-        -0.5, -0.5, 0.5, 0.0, 1.0, // bottom left
-        // bottom
-        -0.5, -0.5, -0.5, 0.0, 0.0, // bottom left
-        0.5, -0.5, -0.5, 1.0, 0.0, // bottom right
-        // right
-        -0.5, 0.5, -0.5, 1.0, 0.0, // upper left
-        -0.5, -0.5, -0.5, 1.0, 1.0, // bottom left
+        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0, 0.0, 0.0,
+         0.5, -0.5,  0.5,  0.0,  0.0, 1.0, 1.0, 0.0,
+         0.5,  0.5,  0.5,  0.0,  0.0, 1.0, 1.0, 1.0,
+         0.5,  0.5,  0.5,  0.0,  0.0, 1.0, 1.0, 1.0,
+        -0.5,  0.5,  0.5,  0.0,  0.0, 1.0, 0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0, 0.0, 0.0,
+
         // left
-        0.5, 0.5, -0.5, 0.0, 0.0, // upper left
-        0.5, -0.5, -0.5, 0.0, 1.0, // bottom left
-        // top
-        -0.5, 0.5, -0.5, 0.0, 1.0, // top left
-        0.5, 0.5, -0.5, 1.0, 1.0, // top right
-    };
-    var cubeElem = [_]graphics.MeshElementType {
-        // front
-        0, 1, 3,
-        1, 3, 2,
-        // bottom
-        3, 2, 4,
-        2, 5, 4,
+        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0, 0.0, 1.0,
+        -0.5,  0.5, -0.5, -1.0,  0.0,  0.0, 1.0, 1.0,
+        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0, 1.0, 0.0,
+        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0, 1.0, 0.0,
+        -0.5, -0.5,  0.5, -1.0,  0.0,  0.0, 0.0, 0.0,
+        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0, 0.0, 1.0,
+
         // right
-        0, 3, 6,
-        3, 6, 7,
-        // left
-        1, 2, 8,
-        2, 8, 9,
+         0.5,  0.5,  0.5,  1.0,  0.0,  0.0, 0.0, 1.0,
+         0.5,  0.5, -0.5,  1.0,  0.0,  0.0, 1.0, 1.0,
+         0.5, -0.5, -0.5,  1.0,  0.0,  0.0, 1.0, 0.0,
+         0.5, -0.5, -0.5,  1.0,  0.0,  0.0, 1.0, 0.0,
+         0.5, -0.5,  0.5,  1.0,  0.0,  0.0, 0.0, 0.0,
+         0.5,  0.5,  0.5,  1.0,  0.0,  0.0, 0.0, 1.0,
+
+        // bottom
+        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0, 0.0, 0.0,
+         0.5, -0.5, -0.5,  0.0, -1.0,  0.0, 0.0, 0.0,
+         0.5, -0.5,  0.5,  0.0, -1.0,  0.0, 0.0, 0.0,
+         0.5, -0.5,  0.5,  0.0, -1.0,  0.0, 0.0, 0.0,
+        -0.5, -0.5,  0.5,  0.0, -1.0,  0.0, 0.0, 0.0,
+        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0, 0.0, 0.0,
+
         // top
-        0, 1, 10,
-        1, 11, 10,
+        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0, 0.0, 0.0,
+         0.5,  0.5, -0.5,  0.0,  1.0,  0.0, 1.0, 0.0,
+         0.5,  0.5,  0.5,  0.0,  1.0,  0.0, 1.0, 1.0,
+         0.5,  0.5,  0.5,  0.0,  1.0,  0.0, 1.0, 1.0,
+        -0.5,  0.5,  0.5,  0.0,  1.0,  0.0, 0.0, 1.0,
+        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0, 0.0, 0.0,
     };
-    PrimitiveCubeMesh = Mesh.create(cubeVert[0..], cubeElem[0..]);
+    //PrimitiveCubeMesh = Mesh.create(cubeVert[0..], cubeElem[0..]);
+    PrimitiveCubeMesh = Mesh.create(cubeVert[0..], null);
 }
 
 pub const GameObject = struct {
@@ -87,6 +139,7 @@ pub const GameObject = struct {
     objectPointer: usize = 0,
     material: Material = Material.default,
 
+    /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
     pub fn createEmpty(allocator: *Allocator) GameObject {
         var childs = GameObjectArrayList.init(allocator);
         var matrix = zlm.Mat4.identity;
@@ -96,6 +149,7 @@ pub const GameObject = struct {
         };
     }
 
+    /// The default kind of game object, it is renderable via its mesh and material.
     pub fn createObject(allocator: *Allocator, mesh: Mesh) GameObject {
         var childs = GameObjectArrayList.init(allocator);
         var matrix = zlm.Mat4.identity;
@@ -128,7 +182,7 @@ pub const GameObject = struct {
     }
 
     /// This functions returns the forward (the direction) vector of this game object using its rotation.
-    pub fn getForward(self: *GameObject) zlm.Vec3 {
+    pub fn getForward(self: *const GameObject) zlm.Vec3 {
         const rot = self.rotation;
         return zlm.Vec3.new(
             @cos(rot.x) * @cos(rot.y),
@@ -137,7 +191,8 @@ pub const GameObject = struct {
         );
     }
 
-    pub fn getLeft(self: *GameObject) zlm.Vec3 {
+    /// This functions returns the left vector of this game object using its rotation.
+    pub fn getLeft(self: *const GameObject) zlm.Vec3 {
         const rot = self.rotation;
         return zlm.Vec3.new(
             -@sin(rot.x),
@@ -146,6 +201,7 @@ pub const GameObject = struct {
         );
     }
 
+    /// Add a game object as children to this game object.
     pub fn add(self: *GameObject, go: GameObject) !void {
         try self.childrens.append(go);
     }
@@ -161,7 +217,7 @@ pub const Camera = struct {
     viewMatrix: zlm.Mat4,
     shader: graphics.ShaderProgram,
 
-    /// Memory is caller-owned (to free, deinit must be called then the object must be freed)
+    /// Memory is caller-owned (de-init must be called before)
     pub fn create(allocator: *Allocator, shader: graphics.ShaderProgram) !*Camera {
         var camera = try allocator.create(Camera);
         var go = GameObject.createCustom(allocator, "camera", @ptrToInt(camera));
@@ -170,10 +226,6 @@ pub const Camera = struct {
         camera.shader = shader;
         camera.fov = 70;
         return camera;
-    }
-
-    pub fn render() void {
-
     }
 
     pub fn deinit(self: *const Camera) void {
@@ -232,16 +284,26 @@ test "empty gameobject" {
     expect(go.objectType == null);
 }
 
+test "empty scene" {
+    var alloc = std.heap.page_allocator;
+    var scene = try Scene.create(alloc);
+    expect(scene.gameObject.objectType != null);
+    expect(std.mem.eql(u8, scene.gameObject.objectType.?, "scene"));
+    scene.deinit();
+}
+
 test "default camera" {
     var alloc = std.heap.page_allocator;
     var cam = try Camera.create(alloc, undefined);
     expect(cam.fov == 70); // default FOV
     expect(cam.gameObject.objectType != null);
     expect(std.mem.eql(u8, cam.gameObject.objectType.?, "camera"));
+    cam.deinit();
 }
 
 test "" {
     comptime {
         @import("std").meta.refAllDecls(@This());
+        @import("std").meta.refAllDecls(GameObject);
     }
 }

@@ -66,6 +66,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
     var cube2 = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
     cube2.position = Vec3.new(-1.2, 0.75, -3);
+    cube2.material.ambient = Vec3.new(0.5, 0.3, 0.4);
     try scene.add(cube2);
 
     var kartMesh = try obj.read_obj(allocator, "res/kart.obj");

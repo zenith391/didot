@@ -45,6 +45,7 @@ pub const Application = struct {
             self.scene.render(self.window);
         }
         self.window.deinit();
+        self.scene.deinitAll();
     }
 
     /// Helper method to call both init() and loop().

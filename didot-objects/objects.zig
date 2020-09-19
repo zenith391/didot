@@ -137,6 +137,8 @@ pub const GameObject = struct {
     /// Pointer to the struct of the object owning this game object.
     /// To save space, it must be considered null when objectType is null.
     objectPointer: usize = 0,
+    /// The allocator used to create objectPointer, if any.
+    objectAllocator: ?*Allocator = null,
     material: Material = Material.default,
 
     /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
@@ -168,7 +170,8 @@ pub const GameObject = struct {
             .matrix = matrix,
             .childrens = childs,
             .objectType = customType,
-            .objectPointer = ptr
+            .objectPointer = ptr,
+            .objectAllocator = allocator
         };
     }
 
@@ -208,6 +211,17 @@ pub const GameObject = struct {
 
     pub fn deinit(self: *const GameObject) void {
         self.childrens.deinit();
+        if (self.objectAllocator) |alloc| {
+            alloc.destroy(@intToPtr(*u8, self.objectPointer));
+        }
+    }
+
+    /// De-init the game object and its children (recursive deinit)
+    pub fn deinitAll(self: *const GameObject) void {
+        for (self.childrens.items) |*child| {
+            child.deinitAll();
+        }
+        self.deinit();
     }
 };
 
@@ -271,6 +285,10 @@ pub const Scene = struct {
 
     pub fn deinit(self: *const Scene) void {
         self.gameObject.deinit();
+    }
+
+    pub fn deinitAll(self: *const Scene) void {
+        self.gameObject.deinitAll();
     }
 };
 

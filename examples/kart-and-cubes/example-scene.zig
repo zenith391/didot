@@ -89,6 +89,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
 pub fn main() !void {
     var gp = std.heap.GeneralPurposeAllocator(.{}) {};
+    defer _ = gp.deinit();
     const allocator = &gp.allocator;
 
     var scene = try Scene.create(allocator);

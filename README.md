@@ -7,7 +7,7 @@ This engine made for Zig is aimed at high-level constructs, you manipulate game 
 That combined with the fact the engine is in multiple packages, this means that changing the graphics module to something else is easy,
 just need to for example use `didot-vulkan` (while it is planned, there is currently no Vulkan backend) instead of `didot-opengl` to use Vulkan. And since they share the same API, absolutely zero porting is necessary (as Vulkan can use a GLSL compiler, however it might not be 100% true for other backends)!
 
-[API reference](https://zenith391.github.io/didot)
+[API reference](https://zenith391.github.io/didot/#root)
 
 ## Examples
 
@@ -70,6 +70,8 @@ var material = Material {
 };
 plane.material = material;
 ```
+
+You can also look at the [kart and cubes example](https://github.com/zenith391/didot/blob/master/examples/kart-and-cubes/example-scene.zig) to see how to make camera movement or load models from OBJ files.
 
 ## How to use
 

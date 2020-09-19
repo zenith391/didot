@@ -26,7 +26,13 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
     var texCoords = ArrayList(zlm.Vec2).init(allocator);
     var elements = ArrayList(Element).init(allocator);
 
+    defer vertices.deinit();
+    defer elements.deinit();
+    defer normals.deinit();
+    defer texCoords.deinit();
+
     const text = try reader.readAllAlloc(allocator, std.math.maxInt(u64));
+    defer allocator.free(text);
     var linesSplit = std.mem.split(text, "\n");
 
     while (true) {
@@ -85,6 +91,7 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
     }
 
     var final = try allocator.alloc(f32, elements.items.len*8);
+    defer allocator.free(final);
     var i: usize = 0;
     for (elements.items) |f| {
         const v = vertices.items[f.posIdx];

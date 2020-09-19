@@ -20,29 +20,40 @@ const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
 
-var inp: Input = undefined;
+var input: *Input = undefined;
 
-fn input(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
+fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     const speed: f32 = 0.1 * delta;
     const forward = gameObject.getForward();
     const left = gameObject.getLeft();
 
-    if (inp.isKeyDown(Input.KEY_W)) {
+    if (input.isKeyDown(Input.KEY_W)) {
         gameObject.position = gameObject.position.add(forward.scale(speed));
     }
-    if (inp.isKeyDown(Input.KEY_S)) {
+    if (input.isKeyDown(Input.KEY_S)) {
         gameObject.position = gameObject.position.add(forward.scale(-speed));
     }
-    if (inp.isKeyDown(Input.KEY_A)) {
+    if (input.isKeyDown(Input.KEY_A)) {
         gameObject.position = gameObject.position.add(left.scale(speed));
     }
-    if (inp.isKeyDown(Input.KEY_D)) {
+    if (input.isKeyDown(Input.KEY_D)) {
         gameObject.position = gameObject.position.add(left.scale(-speed));
+    }
+
+    if (input.isMouseButtonDown(.Left)) {
+        input.setMouseInputMode(.Grabbed);
+    } else if (input.isKeyDown(Input.KEY_ESCAPE)) {
+        input.setMouseInputMode(.Normal);
+    }
+
+    if (input.getMouseInputMode() == .Grabbed) {
+        gameObject.rotation.x -= input.mouseDelta.x / 300.0;
+        gameObject.rotation.y -= input.mouseDelta.y / 300.0;
     }
 }
 
 fn init(allocator: *Allocator, app: *Application) !void {
-    inp = app.window.input();
+    input = &app.window.input;
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
     const scene = app.scene;
 
@@ -56,7 +67,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var camera = try Camera.create(allocator, shader);
     camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
     camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
-    camera.gameObject.updateFn = input;
+    camera.gameObject.updateFn = cameraInput;
     try scene.add(camera.gameObject);
 
     var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
@@ -67,6 +78,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var cube2 = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
     cube2.position = Vec3.new(-1.2, 0.75, -3);
     cube2.material.ambient = Vec3.new(0.5, 0.3, 0.4);
+    cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
     try scene.add(cube2);
 
     var kartMesh = try obj.read_obj(allocator, "res/kart.obj");

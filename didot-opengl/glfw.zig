@@ -8,19 +8,100 @@ const Vec2 = zlm.Vec2;
 
 pub const Input = struct {
     nativeId: *c.GLFWwindow,
+    lastMousePos: Vec2 = Vec2.zero,
+    mouseDelta: Vec2 = Vec2.zero,
+    firstFrame: bool = true,
+
     pub const KEY_A = c.GLFW_KEY_A;
     pub const KEY_D = c.GLFW_KEY_D;
     pub const KEY_S = c.GLFW_KEY_S;
     pub const KEY_W = c.GLFW_KEY_W;
 
+    pub const KEY_ESCAPE = c.GLFW_KEY_ESCAPE;
+
+    pub const KEY_UP = c.GLFW_KEY_UP;
+    pub const KEY_LEFT = c.GLFW_KEY_LEFT;
+    pub const KEY_RIGHT = c.GLFW_KEY_RIGHT;
+    pub const KEY_DOWN = c.GLFW_KEY_DOWN;
+
+    pub const MouseInputMode = enum {
+        Normal,
+        Hidden,
+        Grabbed
+    };
+
+    pub const MouseButton = enum {
+        Left,
+        Middle,
+        Right
+    };
+
+    fn init(self: *const Input) void {
+        c.glfwSetInputMode(self.nativeId, c.GLFW_STICKY_MOUSE_BUTTONS, c.GLFW_TRUE);
+    }
+
     /// Returns true if the key is currently being pressed.
     pub fn isKeyDown(self: *const Input, key: u32) bool {
         return c.glfwGetKey(self.nativeId, @intCast(c_int, key)) == c.GLFW_PRESS;
+    }
+
+    pub fn isMouseButtonDown(self: *const Input, button: MouseButton) bool {
+        var glfwButton: c_int = 0;
+        switch (button) {
+            .Left => glfwButton = c.GLFW_MOUSE_BUTTON_LEFT,
+            .Middle => glfwButton = c.GLFW_MOUSE_BUTTON_MIDDLE,
+            .Right => glfwButton = c.GLFW_MOUSE_BUTTON_RIGHT
+        }
+        return c.glfwGetMouseButton(self.nativeId, glfwButton) == c.GLFW_PRESS;
+    }
+
+    pub fn getMousePosition(self: *const Input) Vec2 {
+        var xpos: f64 = 0;
+        var ypos: f64 = 0;
+        c.glfwGetCursorPos(self.nativeId, &xpos, &ypos);
+        return Vec2.new(@floatCast(f32, xpos), @floatCast(f32, ypos));
+    }
+
+    /// Set the input mode of the mouse.
+    /// This allows to grab, hide or reset to normal the cursor.
+    pub fn setMouseInputMode(self: *const Input, mode: MouseInputMode) void {
+        var glfwMode: c_int = 0;
+        switch (mode) {
+            .Normal => glfwMode = c.GLFW_CURSOR_NORMAL,
+            .Hidden => glfwMode = c.GLFW_CURSOR_HIDDEN,
+            .Grabbed => glfwMode = c.GLFW_CURSOR_DISABLED
+        }
+        c.glfwSetInputMode(self.nativeId, c.GLFW_CURSOR, glfwMode);
+    }
+
+    pub fn getMouseInputMode(self: *const Input) MouseInputMode {
+        var mode: c_int = c.glfwGetInputMode(self.nativeId, c.GLFW_CURSOR);
+        switch (mode) {
+            c.GLFW_CURSOR_NORMAL => return .Normal,
+            c.GLFW_CURSOR_HIDDEN => return .Hidden,
+            c.GLFW_CURSOR_DISABLED => return .Grabbed,
+            else => {
+                // this cannot happen
+                return .Normal;
+            }
+        }
+    }
+
+    pub fn update(self: *Input) void {
+        const pos = self.getMousePosition();
+        if (self.firstFrame) {
+            self.lastMousePos = pos;
+            self.firstFrame = false;
+        }
+        self.mouseDelta = pos.sub(self.lastMousePos);
+        self.lastMousePos = pos;
     }
 };
 
 pub const Window = struct {
     nativeId: *c.GLFWwindow,
+    /// The input context of the window
+    input: Input,
 
     /// Create a new window
     /// By default, the window will be resizable, with empty title and a size of 800x600.
@@ -45,14 +126,10 @@ pub const Window = struct {
         c.glfwMakeContextCurrent(window);
 
         return Window {
-            .nativeId = window
-        };
-    }
-
-    /// Returns the input context of this window.
-    pub fn input(self: *Window) Input {
-        return .{
-            .nativeId = self.nativeId
+            .nativeId = window,
+            .input = .{
+                .nativeId = window
+            }
         };
     }
 
@@ -89,12 +166,13 @@ pub const Window = struct {
         return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
     }
 
-    /// Poll events and swap buffer.
+    /// Poll events, swap buffer and update input.
     /// Returns false if the window should be closed and true otherwises.
     pub fn update(self: *Window) bool {
         c.glfwMakeContextCurrent(self.nativeId);
         c.glfwSwapBuffers(self.nativeId);
         c.glfwPollEvents();
+        self.input.update();
         return c.glfwWindowShouldClose(self.nativeId) == 0;
     }
 

@@ -72,7 +72,7 @@ pub const Color = zlm.Vec3;
 
 pub const Material = struct {
     texture: ?Texture = null,
-    ambient: Color = Color.new(0.3, 0.3, 0.3),
+    ambient: Color = Color.zero,
     diffuse: Color = Color.one,
 
     pub const default = Material {};
@@ -247,6 +247,7 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
 
         camera.shader.setUniformVec3("light.position", zlm.Vec3.new(1.0, 5.0, -1.0));
         camera.shader.setUniformVec3("light.color", zlm.Vec3.new(1.0, 1.0, 1.0));
+        camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
 
         var matrix = zlm.Mat4.createTranslation(gameObject.position);
         camera.shader.setUniformMat4("modelMatrix", matrix);

@@ -1,8 +1,9 @@
 pub const bmp = @import("bmp.zig");
-pub const Allocator = @import("std").mem.Allocator;
+const Allocator = @import("std").mem.Allocator;
 
 pub const Image = struct {
     allocator: ?*Allocator = null,
+    /// The image data, in linear 8-bit RGB format.
     data: []u8,
     width: usize,
     height: usize,
@@ -13,3 +14,9 @@ pub const Image = struct {
         }
     }
 };
+
+test "" {
+    comptime {
+        @import("std").meta.refAllDecls(bmp);
+    }
+}

@@ -15,22 +15,22 @@ pub fn addEngineToExe(step: *LibExeObjStep) void {
     const graphics = Pkg {
         .name = "didot-graphics",
         .path = "didot-opengl/graphics.zig",
-        .dependencies = ([_]Pkg{zlm,image})[0..]
+        .dependencies = &[_]Pkg{zlm,image}
     };
     const objects = Pkg {
         .name = "didot-objects",
         .path = "didot-objects/objects.zig",
-        .dependencies = ([_]Pkg{zlm,graphics})[0..]
+        .dependencies = &[_]Pkg{zlm,graphics}
     };
     const models = Pkg {
         .name = "didot-models",
         .path = "didot-models/models.zig",
-        .dependencies = ([_]Pkg{zlm,graphics})[0..]
+        .dependencies = &[_]Pkg{zlm,graphics}
     };
     const app = Pkg {
         .name = "didot-app",
         .path = "didot-app/app.zig",
-        .dependencies = ([_]Pkg{objects,graphics})[0..]
+        .dependencies = &[_]Pkg{objects,graphics}
     };
 
     step.addPackage(zlm);
@@ -55,9 +55,18 @@ pub fn build(b: *Builder) void {
     addEngineToExe(exe);
     exe.install();
 
+    const otest = b.addTest("didot.zig");
+    otest.emit_docs = true;
+    //otest.emit_bin = false;
+    otest.output_dir = "docs";
+    addEngineToExe(otest);
+
     const run_cmd = exe.run();
     run_cmd.step.dependOn(b.getInstallStep());
 
-    const run_step = b.step("test", "Test Didot with didot-test/example-scene");
+    const run_step = b.step("example", "Test Didot with didot-test/example-scene");
     run_step.dependOn(&run_cmd.step);
+
+    const test_step = b.step("doc", "Test and document Didot");
+    test_step.dependOn(&otest.step);
 }

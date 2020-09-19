@@ -11,6 +11,7 @@ const obj = models.obj;
 const Application = @import("didot-app").Application;
 
 const Texture = graphics.Texture;
+const Input = graphics.Input;
 const Window = graphics.Window;
 const ShaderProgram = graphics.ShaderProgram;
 const Material = graphics.Material;
@@ -19,29 +20,29 @@ const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
 
-var win: Window = undefined;
+var inp: Input = undefined;
 
 fn input(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     const speed: f32 = 0.1 * delta;
     const forward = gameObject.getForward();
     const left = gameObject.getLeft();
 
-    if (win.isKeyDown(graphics.KEY_W)) {
+    if (inp.isKeyDown(Input.KEY_W)) {
         gameObject.position = gameObject.position.add(forward.scale(speed));
     }
-    if (win.isKeyDown(graphics.KEY_S)) {
+    if (inp.isKeyDown(Input.KEY_S)) {
         gameObject.position = gameObject.position.add(forward.scale(-speed));
     }
-    if (win.isKeyDown(graphics.KEY_A)) {
+    if (inp.isKeyDown(Input.KEY_A)) {
         gameObject.position = gameObject.position.add(left.scale(speed));
     }
-    if (win.isKeyDown(graphics.KEY_D)) {
+    if (inp.isKeyDown(Input.KEY_D)) {
         gameObject.position = gameObject.position.add(left.scale(-speed));
     }
 }
 
 fn init(allocator: *Allocator, app: *Application) !void {
-    win = app.window;
+    inp = app.window.input();
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
     const scene = app.scene;
 
@@ -54,8 +55,6 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
     var camera = try Camera.create(allocator, shader);
     camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
-    //camera.pitch = zlm.toRadians(-15.0);
-    //camera.yaw = zlm.toRadians(-120.0);
     camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
     camera.gameObject.updateFn = input;
     try scene.add(camera.gameObject);

@@ -12,12 +12,12 @@ Cube:
 const std = @import("std");
 const zlm = @import("zlm");
 const Vec3 = zlm.Vec3;
+const Allocator = std.mem.Allocator;
 
 const graphics = @import("didot-graphics");
 const objects = @import("didot-objects");
 const Application = @import("didot-app").Application;
 
-const Texture = graphics.Texture;
 const Window = graphics.Window;
 const ShaderProgram = graphics.ShaderProgram;
 
@@ -25,32 +25,33 @@ const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
 
-pub fn main() !void {
-
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
-
-    var scene = try Scene.create(allocator);
-
-    var app = Application {};
-    try app.init(scene);
-
+fn init(allocator: *Allocator, app: *Application) !void {
+    win = app.window;
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
+    const scene = app.scene;
 
     var camera = try Camera.create(allocator, shader);
     camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
-    camera.pitch = zlm.toRadians(-15.0);
-    camera.yaw = zlm.toRadians(-120.0);
+    camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
     try scene.add(camera.gameObject);
 
-    var plane = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
-    plane.position = Vec3.new(0, 0.75, -3);
-    try scene.add(plane);
-
-    app.loop();
+    var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
+    cube.position = Vec3.new(-1.2, 0.75, -3);
+    try scene.add(cube);
 }
 
+pub fn main() !void {
+    var gp = std.heap.GeneralPurposeAllocator(.{}) {};
+    const allocator = &gp.allocator;
+
+    var scene = try Scene.create(allocator);
+
+    var app = Application {
+        .title = "Test Cube",
+        .initFn = init
+    };
+    try app.start(allocator, scene);
+}
 ```
 That is where you can see it's not 100% true that zero porting is necessary, if you use some other backend that doesn't accept GLSL, you'll have to rewrite the shaders.
 
@@ -64,11 +65,6 @@ var material = Material {
     .texture = tex
 };
 plane.material = material;
-```
-
-Last example, a scene with a cube + a textured cube and a camera mover script:
-```zig
-
 ```
 
 ## How to use

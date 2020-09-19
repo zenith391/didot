@@ -5,10 +5,18 @@ const zlm = @import("zlm");
 const Vec2 = zlm.Vec2;
 
 // TODO: more inputs and a more efficient way to do them
-pub const KEY_A = c.GLFW_KEY_A;
-pub const KEY_D = c.GLFW_KEY_D;
-pub const KEY_S = c.GLFW_KEY_S;
-pub const KEY_W = c.GLFW_KEY_W;
+
+pub const Input = struct {
+    nativeId: *c.GLFWwindow,
+    pub const KEY_A = c.GLFW_KEY_A;
+    pub const KEY_D = c.GLFW_KEY_D;
+    pub const KEY_S = c.GLFW_KEY_S;
+    pub const KEY_W = c.GLFW_KEY_W;
+
+    pub fn isKeyDown(self: *const Input, key: u32) bool {
+        return c.glfwGetKey(self.nativeId, @intCast(c_int, key)) == c.GLFW_PRESS;
+    }
+};
 
 pub const Window = struct {
     nativeId: *c.GLFWwindow,
@@ -38,8 +46,10 @@ pub const Window = struct {
         };
     }
 
-    pub fn isKeyDown(self: *const Window, key: u32) bool {
-        return c.glfwGetKey(self.nativeId, @intCast(c_int, key)) == c.GLFW_PRESS;
+    pub fn input(self: *Window) Input {
+        return .{
+            .nativeId = self.nativeId
+        };
     }
 
     pub fn setSize(self: *const Window, width: u32, height: u32) void {

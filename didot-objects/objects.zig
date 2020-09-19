@@ -9,10 +9,14 @@ const Allocator = std.mem.Allocator;
 
 pub const GameObjectArrayList = std.ArrayList(GameObject);
 
-// Must *NOT* be used before initPrimitives() is called.
+/// Mesh of a plane.
 pub var PrimitivePlaneMesh: Mesh = undefined;
+/// Mesh of a cube.
 pub var PrimitiveCubeMesh: Mesh = undefined;
 
+/// This function must be called before primitive meshes (like PrimitiveCubeMesh) can be used.
+/// Since it create meshes it must be called after the window context is set.
+/// It is also automatically called by didot-app.Application.
 pub fn initPrimitives() void {
     var planeVert = [_]f32 {
         -0.5, 0.5, 0.0, 0.0, 0.0,
@@ -79,6 +83,7 @@ pub const GameObject = struct {
     /// Type of object owning this game object ("camera", "scene", etc.)
     objectType: ?[]const u8 = null,
     /// Pointer to the struct of the object owning this game object.
+    /// To save space, it must be considered null when objectType is null.
     objectPointer: usize = 0,
     material: Material = Material.default,
 
@@ -213,3 +218,26 @@ pub const Scene = struct {
         self.gameObject.deinit();
     }
 };
+
+// Tests
+const expect = std.testing.expect;
+
+test "empty gameobject" {
+    var alloc = std.heap.page_allocator;
+    var go = GameObject.createEmpty(alloc);
+    expect(go.childrens.items.len == 0);
+    expect(go.objectType == null);
+}
+
+test "default camera" {
+    var alloc = std.heap.page_allocator;
+    var cam = try Camera.create(alloc, undefined);
+    expect(cam.fov == 70); // default FOV
+    expect(cam.gameObject.objectType != null);
+    expect(std.mem.eql(u8, cam.gameObject.objectType.?, "camera"));
+}
+test "all" {
+    comptime {
+        @import("std").meta.refAllDecls(@This());
+    }
+}

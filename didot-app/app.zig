@@ -7,12 +7,13 @@ const Window = graphics.Window;
 const Scene = objects.Scene;
 
 pub const Application = struct {
-    // How many time per second update should be called, defaults to 60 updates/s.
+    /// How many time per second updates should be called, defaults to 60 updates/s.
     updateTarget: u32 = 60,
     window: Window = undefined,
     scene: *Scene = undefined,
     title: [:0]const u8 = "Didot Game",
     allocator: *Allocator = undefined,
+    /// Optional function to be called on application init.
     initFn: ?fn(allocator: *Allocator, app: *Application) anyerror!void = null,
 
     pub fn init(self: *Application, allocator: *Allocator, scene: *Scene) !void {

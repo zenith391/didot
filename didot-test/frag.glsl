@@ -10,6 +10,6 @@ void main() {
 	if (useTex) {
 		outColor = texture(tex, texCoord);
 	} else {
-		outColor = vec4(0.7, 0.7, 0.7, 1.0);
+		outColor = vec4(1.0, 1.0, 1.0, 1.0);
 	}
 }

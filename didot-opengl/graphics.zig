@@ -56,9 +56,13 @@ pub const Mesh = struct {
     }
 };
 
+/// Color defined to be a 3 component vector
+/// X value is red, Y value is blue and Z value is green.
+pub const Color = zlm.Vec3;
+
 pub const Material = struct {
     texture: ?Texture = null,
-    color: ?zlm.Vec3 = null,
+    ambient: ?Color = null,
 
     pub const default = Material {};
 };
@@ -186,7 +190,8 @@ const Scene = objects.Scene;
 const GameObject = objects.GameObject;
 const Camera = objects.Camera;
 
-// renderScene is here as it uses graphics API-dependent code (it's the rendering part afterall)
+/// Internal method for rendering a game scene.
+/// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)
 pub fn renderScene(scene: *const Scene, window: Window) void {
     const size = window.getFramebufferSize();
     c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
@@ -231,7 +236,7 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
             camera.shader.setUniformBool("useTex", true);
         } else {
             camera.shader.setUniformBool("useTex", false);
-            if (material.color) |color| {
+            if (material.ambient) |ambient| {
 
             }
         }

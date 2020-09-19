@@ -99,3 +99,10 @@ pub const Window = struct {
     }
 
 };
+
+test "" {
+    comptime {
+        std.meta.refAllDecls(Window);
+        std.meta.refAllDecls(Input);
+    }
+}

@@ -68,7 +68,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     cube2.position = Vec3.new(-1.2, 0.75, -3);
     try scene.add(cube2);
 
-    var kartMesh = try obj.read_obj(allocator, "kart.obj");
+    var kartMesh = try obj.read_obj(allocator, "res/kart.obj");
     var kart = GameObject.createObject(allocator, kartMesh);
     kart.position = Vec3.new(0.7, 0.75, -5);
     try scene.add(kart);

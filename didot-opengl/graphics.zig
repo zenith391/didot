@@ -257,3 +257,9 @@ pub const WindowError = error {
 };
 
 usingnamespace @import("glfw.zig");
+
+test "" {
+    comptime {
+        std.meta.refAllDecls(@This()); // to ref structs
+    }
+}

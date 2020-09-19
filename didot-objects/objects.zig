@@ -183,7 +183,10 @@ pub const Camera = struct {
 
 pub const Scene = struct {
     gameObject: GameObject,
-    /// The camera the scene is currently using
+    /// The camera the scene is currently using.
+    /// It is auto-detected at runtime before each render, by looking
+    /// on top-level game objects to select one that corresponds
+    /// to the "camera" type.
     camera: ?*Camera,
 
     pub fn create(allocator: *Allocator) !*Scene {
@@ -236,7 +239,8 @@ test "default camera" {
     expect(cam.gameObject.objectType != null);
     expect(std.mem.eql(u8, cam.gameObject.objectType.?, "camera"));
 }
-test "all" {
+
+test "" {
     comptime {
         @import("std").meta.refAllDecls(@This());
     }

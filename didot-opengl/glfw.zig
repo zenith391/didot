@@ -13,6 +13,7 @@ pub const Input = struct {
     pub const KEY_S = c.GLFW_KEY_S;
     pub const KEY_W = c.GLFW_KEY_W;
 
+    /// Returns true if the key is currently being pressed.
     pub fn isKeyDown(self: *const Input, key: u32) bool {
         return c.glfwGetKey(self.nativeId, @intCast(c_int, key)) == c.GLFW_PRESS;
     }
@@ -21,6 +22,8 @@ pub const Input = struct {
 pub const Window = struct {
     nativeId: *c.GLFWwindow,
 
+    /// Create a new window
+    /// By default, the window will be resizable, with empty title and a size of 800x600.
     pub fn create() !Window {
         if (c.glfwInit() != 1) {
             std.debug.warn("Could not init GLFW!\n", .{});
@@ -46,6 +49,7 @@ pub const Window = struct {
         };
     }
 
+    /// Returns the input context of this window.
     pub fn input(self: *Window) Input {
         return .{
             .nativeId = self.nativeId
@@ -85,8 +89,8 @@ pub const Window = struct {
         return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
     }
 
-    /// Poll events and swap buffer
-    /// Returns false if the window is closed and true otherwises.
+    /// Poll events and swap buffer.
+    /// Returns false if the window should be closed and true otherwises.
     pub fn update(self: *Window) bool {
         c.glfwMakeContextCurrent(self.nativeId);
         c.glfwSwapBuffers(self.nativeId);

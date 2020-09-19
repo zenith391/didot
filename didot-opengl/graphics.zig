@@ -162,7 +162,7 @@ pub const ShaderProgram = struct {
     }
 };
 
-pub const Image = @import("didot-image").Image;
+const Image = @import("didot-image").Image;
 
 pub const Texture = struct {
     id: c.GLuint,
@@ -260,6 +260,8 @@ usingnamespace @import("glfw.zig");
 
 test "" {
     comptime {
-        std.meta.refAllDecls(@This()); // to ref structs
+        std.meta.refAllDecls(@This());
+        std.meta.refAllDecls(ShaderProgram);
+        std.meta.refAllDecls(Texture);
     }
 }

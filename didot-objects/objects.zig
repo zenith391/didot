@@ -250,6 +250,28 @@ pub const Camera = struct {
     }
 };
 
+pub const PointLight = struct {
+    gameObject: GameObject,
+    color: graphics.Color,
+    /// Constant attenuation (the higher it is, the darker the light is)
+    constant: f32,
+    /// Linear attenuation
+    linear: f32,
+    /// Quadratic attenuation
+    quadratic: f32,
+
+    pub fn create(allocator: *Allocator) !*PointLight {
+        var light = try allocator.create(PointLight);
+        var go = GameObject.createCustom(allocator, "point_light", @ptrToInt(light));
+        light.gameObject = go;
+        light.color = zlm.Vec3.one;
+        light.constant = 1.0;
+        light.linear = 0.018;
+        light.quadratic = 0.016;
+        return light;
+    }
+};
+
 pub const Scene = struct {
     gameObject: GameObject,
     /// The camera the scene is currently using.
@@ -257,6 +279,7 @@ pub const Scene = struct {
     /// on top-level game objects to select one that corresponds
     /// to the "camera" type.
     camera: ?*Camera,
+    pointLight: ?*PointLight,
 
     pub fn create(allocator: *Allocator) !*Scene {
         var scene = try allocator.create(Scene);
@@ -269,12 +292,15 @@ pub const Scene = struct {
 
         // TODO: only do this when a new child is inserted
         self.camera = null;
+        self.pointLight = null;
         for (childs.items) |child| {
             if (child.objectType) |objectType| {
                 if (std.mem.eql(u8, objectType, "camera")) {
                     self.camera = @intToPtr(*Camera, child.objectPointer);
                     self.camera.?.gameObject = child;
-                    break;
+                } else if (std.mem.eql(u8, objectType, "point_light")) {
+                    self.pointLight = @intToPtr(*PointLight, child.objectPointer);
+                    self.pointLight.?.gameObject = child;
                 }
             }
         }
@@ -326,5 +352,6 @@ test "" {
     comptime {
         @import("std").meta.refAllDecls(@This());
         @import("std").meta.refAllDecls(GameObject);
+        @import("std").meta.refAllDecls(Light);
     }
 }

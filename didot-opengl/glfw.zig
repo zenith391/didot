@@ -124,7 +124,7 @@ pub const Window = struct {
             return WindowError.InitializationError;
         }
         c.glfwMakeContextCurrent(window);
-
+        c.glfwSwapInterval(1);
         return Window {
             .nativeId = window,
             .input = .{

@@ -148,6 +148,12 @@ pub const ShaderProgram = struct {
         c.glUniform1i(uniform, v);
     }
 
+    /// Set an OpenGL uniform to the following float.
+    pub fn setUniformFloat(self: *ShaderProgram, name: [:0]const u8, val: f32) void {
+        var uniform = c.glGetUniformLocation(self.id, name);
+        c.glUniform1f(uniform, val);
+    }
+
     /// Set an OpenGL uniform to the following 3D float vector.
     pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, vec: zlm.Vec3) void {
         var uniform = c.glGetUniformLocation(self.id, name);
@@ -209,6 +215,8 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
     c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
     c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
     c.glEnable(c.GL_DEPTH_TEST);
+    //c.glEnable(c.GL_CULL_FACE);
+    //c.glCullFace(c.GL_FRONT);
     
     if (scene.camera) |camera| {
         var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.001, 100);
@@ -228,8 +236,17 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             zlm.Vec3.new(0.0, 1.0, 0.0)
         );
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
-        camera.shader.setUniformVec3("light.position", zlm.Vec3.new(1.0, 5.0, -1.0));
-        camera.shader.setUniformVec3("light.color", zlm.Vec3.new(1.0, 1.0, 1.0));
+
+        if (scene.pointLight) |light| {
+            camera.shader.setUniformVec3("light.position", light.gameObject.position);
+            camera.shader.setUniformVec3("light.color", light.color);
+            camera.shader.setUniformFloat("light.constant", light.constant);
+            camera.shader.setUniformFloat("light.linear", light.linear);
+            camera.shader.setUniformFloat("light.quadratic", light.quadratic);
+            camera.shader.setUniformBool("useLight", true);
+        } else {
+            camera.shader.setUniformBool("useLight", false);
+        }
         camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
         renderObject(scene.gameObject, camera);
     }

@@ -23,5 +23,6 @@ pub extern fn glEnableVertexAttribArray(index: GLuint) void;
 pub extern fn glGetShaderInfoLog(shader: GLuint, maxLength: GLsizei, length: *GLsizei, infoLog: [*]GLchar) void;
 pub extern fn glGetUniformLocation(shader: GLuint, name: [*:0]const GLchar) GLint;
 pub extern fn glUniform1i(location: GLint, v0: GLint) void;
+pub extern fn glUniform1f(location: GLint, v0: GLfloat) void;
 pub extern fn glUniform3f(location: GLint, v0: GLfloat, v1: GLfloat, v2: GLfloat) void;
 pub extern fn glUniformMatrix4fv(location: GLint, count: GLsizei, transpose: GLboolean, value: *const GLfloat) void;

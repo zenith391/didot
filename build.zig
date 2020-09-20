@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Builder = std.build.Builder;
 const LibExeObjStep = std.build.LibExeObjStep;
 const Pkg = std.build.Pkg;
@@ -47,14 +48,15 @@ pub fn addEngineToExe(step: *LibExeObjStep) void {
 
 pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
-    const mode = b.standardReleaseOptions();
+    var mode = b.standardReleaseOptions();
+    const stripExample = b.option(bool, "strip-example", "Attempt to minify examples by stripping them and changing release mode.") orelse false;
 
     const exe = b.addExecutable("didot-example-scene", "examples/kart-and-cubes/example-scene.zig");
     exe.setTarget(target);
-    exe.setBuildMode(mode);
+    exe.setBuildMode(if (stripExample) builtin.Mode.ReleaseSmall else mode);
     addEngineToExe(exe);
-    //exe.single_threaded = true;
-    //exe.strip = true;
+    exe.single_threaded = stripExample;
+    exe.strip = stripExample;
     exe.install();
 
     if (@hasField(LibExeObjStep, "emit_docs")) {

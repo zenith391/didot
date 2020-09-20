@@ -19,6 +19,7 @@ const Material = graphics.Material;
 const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
+const PointLight = objects.PointLight;
 
 var input: *Input = undefined;
 
@@ -47,9 +48,15 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
     }
 
     if (input.getMouseInputMode() == .Grabbed) {
-        gameObject.rotation.x -= input.mouseDelta.x / 300.0;
-        gameObject.rotation.y -= input.mouseDelta.y / 300.0;
+        gameObject.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
+        gameObject.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
     }
+}
+
+fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
+    const time = @intToFloat(f64, std.time.milliTimestamp());
+    const rad = @floatCast(f32, @mod((time/1000.0), std.math.pi*2.0));
+    gameObject.position = Vec3.new(@sin(rad)*10+5, 3, @cos(rad)*10-5);
 }
 
 fn init(allocator: *Allocator, app: *Application) !void {
@@ -89,12 +96,22 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
     var i: f32 = 0;
     while (i < 5) {
-        var kart2 = GameObject.createObject(allocator, kartMesh);
-        kart2.position = Vec3.new(0.7, 0.75, -8 - (i*3));
-        try scene.add(kart2);
+        var j: f32 = 0;
+        while (j < 5) {
+            var kart2 = GameObject.createObject(allocator, kartMesh);
+            kart2.position = Vec3.new(0.7 + (j*8), 0.75, -8 - (i*3));
+            try scene.add(kart2);
+            j += 1;
+        }
         i += 1;
     }
 
+    var light = try PointLight.create(allocator);
+    light.gameObject.position = Vec3.new(1, 5, -5);
+    light.gameObject.updateFn = testLight;
+    light.gameObject.mesh = objects.PrimitiveCubeMesh;
+    light.gameObject.material.ambient = Vec3.one;
+    try scene.add(light.gameObject);
 
     std.debug.warn("{} bytes used after init.\n", .{gp.total_requested_bytes});
 }

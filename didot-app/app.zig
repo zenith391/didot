@@ -35,10 +35,15 @@ pub const Application = struct {
     }
 
     fn updateLoop(self: *Application) void {
+        var lastTime: i64 = std.time.milliTimestamp();
         while (!self.closing) {
             var arena = std.heap.ArenaAllocator.init(self.allocator);
             const allocator = &arena.allocator;
-            self.scene.gameObject.update(self.allocator, 1) catch |err| {
+
+            const s_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * 1000;
+            const time = std.time.milliTimestamp();
+            const delta = @floatCast(f32, @intToFloat(f64, time-lastTime) / s_per_frame);
+            self.scene.gameObject.update(self.allocator, delta) catch |err| {
                 // TODO: correctly handle errors
                 std.debug.warn("{}", .{@errorName(err)});
                 if (@errorReturnTrace()) |trace| {
@@ -47,8 +52,9 @@ pub const Application = struct {
                 @panic("error");
             };
             const wait = @floatToInt(u64, 
-                @floor((1.0/@intToFloat(f32, self.updateTarget))*1000000000.0)
+                @floor((1.0/@intToFloat(f64, self.updateTarget))*1000000000.0)
             );
+            lastTime = std.time.milliTimestamp();
             std.time.sleep(wait);
             arena.deinit();
         }

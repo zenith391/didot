@@ -2,7 +2,7 @@
 
 ![A kart and 2 cubes rendering with Didot](https://raw.githubusercontent.com/zenith391/didot/master/examples/kart-and-cubes.png)
 
-This engine made for Zig is aimed at high-level constructs, you manipulate game objects and meshes instead of OpenGL calls and batches.
+This engine made for Zig is aimed at high-level constructs, you manipulate game objects and meshes instead of OpenGL calls and batches and you have multi-threading.
 
 That combined with the fact the engine is in multiple packages, this means that changing the graphics module to something else is easy,
 just need to for example use `didot-vulkan` (while it is planned, there is currently no Vulkan backend) instead of `didot-opengl` to use Vulkan. And since they share the same API, absolutely zero porting is necessary (as Vulkan can use a GLSL compiler, however it might not be 100% true for other backends)!

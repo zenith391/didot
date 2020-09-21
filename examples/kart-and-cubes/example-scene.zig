@@ -56,7 +56,7 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
 fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     const time = @intToFloat(f64, std.time.milliTimestamp());
     const rad = @floatCast(f32, @mod((time/1000.0), std.math.pi*2.0));
-    gameObject.position = Vec3.new(@sin(rad)*10+5, 3, @cos(rad)*10-5);
+    gameObject.position = Vec3.new(@sin(rad)*10+5, 3, @cos(rad)*10-10);
 }
 
 fn init(allocator: *Allocator, app: *Application) !void {
@@ -78,7 +78,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     try scene.add(camera.gameObject);
 
     var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
-    cube.position = Vec3.new(0, 0.75, -3);
+    cube.position = Vec3.new(10, -0.75, -10);
+    cube.scale = Vec3.new(20, 1, 20);
     cube.material = grassMaterial;
     try scene.add(cube);
 

@@ -63,7 +63,7 @@ pub fn build(b: *Builder) void {
         const otest = b.addTest("didot.zig");
         otest.emit_docs = true;
         //otest.emit_bin = false;
-        otest.output_dir = "docs";
+        otest.setOutputDir("docs");
         addEngineToExe(otest);
 
         const test_step = b.step("doc", "Test and document Didot");

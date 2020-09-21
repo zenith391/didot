@@ -172,9 +172,10 @@ pub const ShaderProgram = struct {
                 // when a GL context isn't set (so when the window isn't created)
                 return ShaderError.InvalidGLContextError;
             }
-            std.debug.warn("uncorrect shader: \n", .{});
             var totalSize: usize = @intCast(usize, totalLen);
-            std.debug.warn("{}\n", .{buf[0..totalSize]});
+            const didot_log = std.log.scoped(.didot);
+            didot_log.err("uncorrect shader: ", .{});
+            didot_log.err("{}", .{buf[0..totalSize]});
             return ShaderError.ShaderCompileError;
         }
     }
@@ -266,8 +267,8 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
         camera.shader.setUniformVec3("material.ambient", material.ambient);
         camera.shader.setUniformVec3("material.diffuse", material.diffuse);
         camera.shader.setUniformVec3("material.specular", material.specular);
-
-        var matrix = zlm.Mat4.createTranslation(gameObject.position);
+        var matrix = zlm.Mat4.createScale(gameObject.scale).mul(
+            zlm.Mat4.createTranslation(gameObject.position));
         camera.shader.setUniformMat4("modelMatrix", matrix);
 
         if (mesh.hasEbo) {

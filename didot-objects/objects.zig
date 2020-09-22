@@ -321,6 +321,35 @@ pub const Scene = struct {
     }
 };
 
+pub const ComponentOptions = struct {
+    /// Functions called regularly depending on the updateTarget value of the Application.
+    updateFn: ?fn(allocator: *Allocator, component: *Component, gameObject: *GameObject, delta: f32) anyerror!void = null
+};
+
+pub const Component = struct {
+    options: ComponentOptions,
+    data: usize,
+
+    pub fn update(self: *Component, gameObject: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
+        if (self.options.updateFn) |func| {
+            try func(allocator, self, gameObject, delta);
+        }
+    }
+};
+
+pub fn ComponentType(comptime name: @Type(.EnumLiteral), comptime Data: @Type(.Struct), options: ComponentOptions) type {
+    return struct {
+        pub fn new() Component {
+            var data = Data {};
+            var cp = Component {
+                .options = options,
+                .data = @ptrToInt(&data)
+            };
+            return cp;
+        }
+    };
+}
+
 // Tests
 const expect = std.testing.expect;
 

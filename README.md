@@ -7,6 +7,8 @@ This engine made for Zig is aimed at high-level constructs, you manipulate game 
 That combined with the fact the engine is in multiple packages, this means that changing the graphics module to something else is easy,
 just need to for example use `didot-vulkan` (while it is planned, there is currently no Vulkan backend) instead of `didot-opengl` to use Vulkan. And since they share the same API, absolutely zero porting is necessary (as Vulkan can use a GLSL compiler, however it might not be 100% true for other backends)!
 
+This also works for windowing backend, so by using `didot-x11` (still WIP) instead of `didot-glfw`, your games can now seamlessly run without GLFW as a dependency!
+
 [API reference](https://zenith391.github.io/didot/#root)
 
 ## Examples

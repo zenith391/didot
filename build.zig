@@ -43,7 +43,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     }
     if (std.mem.eql(u8, config.windowModule, "didot-x11")) {
         step.linkSystemLibrary("X11");
-        step.linkSystemLibrary("c"); // (for some reason libc is still needed?)
+        step.linkSystemLibrary("c");
     }
     const window = Pkg {
         .name = "didot-window",

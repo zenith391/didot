@@ -178,6 +178,7 @@ pub const Window = struct {
         };
     }
 
+    // TODO: use EGL
     fn initGLX(dpy: *c.Display, root: c.Window, screen: c_int) !c.Window {
         var att = [_]c.GLint{c.GLX_RGBA, c.GLX_DEPTH_SIZE, 24, c.GLX_DOUBLEBUFFER, c.None};
         const visual = c.glXChooseVisual(dpy, screen, &att[0]) orelse return WindowError.InitializationError;
@@ -213,7 +214,7 @@ pub const Window = struct {
     }
 
     pub fn setPosition(self: *const Window, x: i32, y: i32) void {
-
+        _ = c.XMoveWindow(self.nativeDisplay, self.nativeId, @intCast(c_int, x), @intCast(c_int, y));
     }
 
     pub fn setTitle(self: *const Window, title: [:0]const u8) void {
@@ -221,15 +222,15 @@ pub const Window = struct {
     }
 
     pub fn getPosition(self: *const Window) Vec2 {
-        var x: i32 = 0;
-        var y: i32 = 0;
-        return Vec2.new(@intToFloat(f32, x), @intToFloat(f32, y));
+        var wa: c.XWindowAttributes = undefined;
+        _ = c.XGetWindowAttributes(self.nativeDisplay, self.nativeId, &wa);
+        return Vec2.new(@intToFloat(f32, wa.x), @intToFloat(f32, wa.y));
     }
 
     pub fn getSize(self: *const Window) Vec2 {
-        var width: i32 = 1;
-        var height: i32 = 1;
-        return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
+        var wa: c.XWindowAttributes = undefined;
+        _ = c.XGetWindowAttributes(self.nativeDisplay, self.nativeId, &wa);
+        return Vec2.new(@intToFloat(f32, wa.width), @intToFloat(f32, wa.height));
     }
 
     pub fn getFramebufferSize(self: *const Window) Vec2 {

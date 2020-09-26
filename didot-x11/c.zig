@@ -54,6 +54,7 @@ pub const GLX_DOUBLEBUFFER = c.GLX_DOUBLEBUFFER;
 pub extern fn XOpenDisplay([*c]const u8) ?*Display;
 pub extern fn XCreateSimpleWindow(?*Display, Window, c_int, c_int, c_uint, c_uint, c_uint, c_ulong, c_ulong) Window;
 pub extern fn XMapWindow(?*Display, Window) c_int;
+pub extern fn XMoveWindow(?*Display, Window, c_int, c_int) c_int;
 pub extern fn XFlush(?*Display) c_int;
 pub extern fn XInitThreads() c_int;
 pub extern fn XCreateColormap(?*Display, Window, [*c]Visual, c_int) Colormap;

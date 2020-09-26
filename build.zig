@@ -1,10 +1,18 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const Builder = std.build.Builder;
 const LibExeObjStep = std.build.LibExeObjStep;
 const Pkg = std.build.Pkg;
 
-pub fn addEngineToExe(step: *LibExeObjStep) void {
+pub const EngineConfig = struct {
+    windowModule: []const u8 = "didot-glfw",
+    /// Whether or not to automatically set the window module depending on the target platform.
+    /// didot-glfw will be used for Windows and didot-x11 will be used for Linux.
+    autoWindow: bool = true
+};
+
+pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void {
+    var allocator = step.builder.allocator;
+
     const zlm = Pkg {
         .name = "zlm",
         .path = "zlm/zlm.zig"
@@ -13,11 +21,40 @@ pub fn addEngineToExe(step: *LibExeObjStep) void {
         .name = "didot-image",
         .path = "didot-image/image.zig"
     };
+
+    var windowModule = config.windowModule;
+    if (config.autoWindow) {
+        const target = step.target.toTarget().os.tag;
+        switch (target) {
+            .linux => {
+                windowModule = "didot-x11";
+            },
+            else => {}
+        }
+    }
+
+    const windowPath = try std.mem.concat(allocator, u8, &[_][]const u8{windowModule, "/window.zig"});
+    if (std.mem.eql(u8, config.windowModule, "didot-glfw")) {
+        step.linkSystemLibrary("glfw");
+        step.linkSystemLibrary("c");
+    }
+    if (std.mem.eql(u8, config.windowModule, "didot-x11")) {
+        step.linkSystemLibrary("X11");
+    }
+
+    const window = Pkg {
+        .name = "didot-window",
+        //.path = windowPath, // disabled until i find a way to fix the bug
+        .path = config.windowModule ++ "/window.zig",
+        .dependencies = &[_]Pkg{zlm}
+    };
+
     const graphics = Pkg {
         .name = "didot-graphics",
         .path = "didot-opengl/graphics.zig",
-        .dependencies = &[_]Pkg{zlm,image}
+        .dependencies = &[_]Pkg{window,image,zlm}
     };
+
     const objects = Pkg {
         .name = "didot-objects",
         .path = "didot-objects/objects.zig",
@@ -36,25 +73,26 @@ pub fn addEngineToExe(step: *LibExeObjStep) void {
 
     step.addPackage(zlm);
     step.addPackage(image);
+    step.addPackage(window);
     step.addPackage(graphics);
     step.addPackage(objects);
     step.addPackage(models);
     step.addPackage(app);
 
-    step.linkSystemLibrary("glfw");
-    step.linkSystemLibrary("c");
     step.linkSystemLibrary("GL");
 }
 
-pub fn build(b: *Builder) void {
+pub fn build(b: *Builder) !void {
     const target = b.standardTargetOptions(.{});
     var mode = b.standardReleaseOptions();
     const stripExample = b.option(bool, "strip-example", "Attempt to minify examples by stripping them and changing release mode.") orelse false;
 
     const exe = b.addExecutable("didot-example-scene", "examples/kart-and-cubes/example-scene.zig");
     exe.setTarget(target);
-    exe.setBuildMode(if (stripExample) builtin.Mode.ReleaseSmall else mode);
-    addEngineToExe(exe);
+    exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
+    try addEngineToExe(exe, .{
+        .windowModule = "didot-x11"
+    });
     exe.single_threaded = stripExample;
     exe.strip = stripExample;
     exe.install();
@@ -64,7 +102,9 @@ pub fn build(b: *Builder) void {
         otest.emit_docs = true;
         //otest.emit_bin = false;
         otest.setOutputDir("docs");
-        addEngineToExe(otest);
+        try addEngineToExe(otest, .{
+            .autoWindow = false
+        });
 
         const test_step = b.step("doc", "Test and document Didot");
         test_step.dependOn(&otest.step);

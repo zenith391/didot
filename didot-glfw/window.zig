@@ -1,5 +1,11 @@
-const c = @import("c.zig");
-const WindowError = @import("graphics.zig").WindowError;
+const c = @cImport({
+    @cInclude("GLFW/glfw3.h");
+});
+
+pub const WindowError = error {
+    InitializationError
+};
+
 const std = @import("std");
 const zlm = @import("zlm");
 const Vec2 = zlm.Vec2;
@@ -36,6 +42,80 @@ pub const Input = struct {
         Right
     };
 
+    pub const Joystick = struct {
+        id: u4,
+        name: []const u8,
+        /// This doesn't necessarily means the joystick *IS* a gamepad, this means it is registered in the DB.
+        isGamepad: bool,
+
+        pub const ButtonType = enum {
+            A,
+            B,
+            X,
+            Y,
+            LeftBumper,
+            RightBumper,
+            Back,
+            Start,
+            Guide,
+            LeftThumb,
+            RightThumb,
+            DPad_Up,
+            DPad_Right,
+            DPad_Down,
+            DPad_Left
+        };
+
+        pub fn getRawAxes(self: *const Joystick) []const f32 {
+            var count: c_int = 0;
+            const axes = c.glfwGetJoystickAxes(self.id, &count);
+            return axes[0..@intCast(usize, count)];
+        }
+
+        pub fn getRawButtons(self: *const Joystick) []bool {
+            var count: c_int = 0;
+            const cButtons = c.glfwGetJoystickButtons(self.id, &count);
+            var cButtonsBool: [15]bool = undefined;
+
+            var i: usize = 0;
+            while (i < count) {
+                cButtonsBool[i] = cButtons[i] == c.GLFW_PRESS;
+                i += 1;
+            }
+
+            return cButtonsBool[0..@intCast(usize, count)];
+        }
+
+        pub fn getAxes(self: *const Joystick) []const f32 {
+            if (self.isGamepad) {
+                var state: c.GLFWgamepadstate = undefined;
+                _ = c.glfwGetGamepadState(self.id, &state);
+                return state.axes[0..6];
+            } else {
+                return self.getRawAxes();
+            }
+        }
+
+        pub fn isButtonDown(self: *const Joystick, btn: ButtonType) bool {
+            const buttons = self.getButtons();
+            return buttons[@enumToInt(btn)];
+        }
+
+        pub fn getButtons(self: *const Joystick) []bool {
+            if (self.isGamepad) {
+                var state: c.GLFWgamepadstate = undefined;
+                _ = c.glfwGetGamepadState(self.id, &state);
+                var buttons: [15]bool = undefined;
+                for (state.buttons[0..15]) |value, i| {
+                    buttons[i] = value == c.GLFW_PRESS;
+                }
+                return buttons[0..];
+            } else {
+                return self.getRawButtons();
+            }
+        }
+    };
+
     fn init(self: *const Input) void {
         c.glfwSetInputMode(self.nativeId, c.GLFW_STICKY_MOUSE_BUTTONS, c.GLFW_TRUE);
     }
@@ -43,6 +123,27 @@ pub const Input = struct {
     /// Returns true if the key is currently being pressed.
     pub fn isKeyDown(self: *const Input, key: u32) bool {
         return c.glfwGetKey(self.nativeId, @intCast(c_int, key)) == c.GLFW_PRESS;
+    }
+
+    pub fn getJoystick(self: *const Input, id: u4) ?Joystick {
+        if (c.glfwJoystickPresent(@intCast(c_int, id)) == c.GLFW_FALSE) {
+            return null;
+        } else {
+            const gamepad = c.glfwJoystickIsGamepad(id) == c.GLFW_TRUE;
+            const cName = if (gamepad) c.glfwGetJoystickName(id) else c.glfwGetGamepadName(id);
+            var i: usize = 0;
+            while (true) {
+                if (cName[i] == 0) break;
+                i += 1;
+            }
+            const name = cName[0..i];
+
+            return Joystick {
+                .id = id,
+                .name = name,
+                .isGamepad = gamepad
+            };
+        }
     }
 
     pub fn isMouseButtonDown(self: *const Input, button: MouseButton) bool {

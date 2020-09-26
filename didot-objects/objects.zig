@@ -287,6 +287,22 @@ pub const Scene = struct {
         return scene;
     }
 
+    pub fn loadFromFile(allocator: *Allocator, path: []const u8) !Scene {
+        const cwd = std.fs.cwd();
+        const file = try std.fs.cwd().openFile(path, .{
+            .read = true
+        });
+
+        const text = try reader.readAllAlloc(allocator, std.math.maxInt(u64));
+        defer allocator.free(text);
+
+        return Scene.loadFromMemory(allocator, text);
+    }
+
+    pub fn loadFromMemory(allocator: *Allocator, json: []const u8) !Scene {
+
+    }
+
     pub fn render(self: *Scene, window: Window) void {
         var childs: GameObjectArrayList = self.gameObject.childrens;
 

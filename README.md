@@ -79,9 +79,9 @@ Just add this to your build script:
 ```zig
 const engine = @import("path/to/engine/build.zig");
 
-pub fn build(b: *Builder) {
+pub fn build(b: *Builder) !void {
     // your code ...
-    engine.addEngineToExe(exe);
+    try engine.addEngineToExe(exe, .{});
     // more code ...
 }
 ```

@@ -202,6 +202,10 @@ pub const Texture = struct {
         };
     }
 
+    pub fn deinit(self: *Texture) void {
+        c.glDeleteTextures(1, &selF.id);
+    }
+
 };
 
 const objects = @import("../didot-objects/objects.zig"); // hacky hack til i found a way for graphics to depend on objects
@@ -284,11 +288,7 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
     }
 }
 
-pub const WindowError = error {
-    InitializationError
-};
-
-usingnamespace @import("glfw.zig");
+usingnamespace @import("didot-window");
 
 test "" {
     comptime {

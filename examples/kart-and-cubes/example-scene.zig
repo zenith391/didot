@@ -41,16 +41,40 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
         gameObject.position = gameObject.position.add(left.scale(-speed));
     }
 
-    if (input.isMouseButtonDown(.Left)) {
-        input.setMouseInputMode(.Grabbed);
-    } else if (input.isKeyDown(Input.KEY_ESCAPE)) {
-        input.setMouseInputMode(.Normal);
-    }
+    // if (input.isMouseButtonDown(.Left)) {
+    //     input.setMouseInputMode(.Grabbed);
+    // } else if (input.isKeyDown(Input.KEY_ESCAPE)) {
+    //     input.setMouseInputMode(.Normal);
+    // }
 
-    if (input.getMouseInputMode() == .Grabbed) {
-        gameObject.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
-        gameObject.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
-    }
+    // if (input.getMouseInputMode() == .Grabbed) {
+    //     gameObject.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
+    //     gameObject.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
+    // }
+
+    // if (input.getJoystick(0)) |joystick| {
+    //     const axes = joystick.getRawAxes();
+    //     var fw = axes[1]; // forward
+    //     var r = axes[0]; // right
+    //     var thrust = (axes[3] - 1.0) * -0.5;
+    //     const threshold = 0.2;
+
+    //     if (r < threshold and r > 0) r = 0;
+    //     if (r > -threshold and r < 0) r = 0;
+    //     if (fw < threshold and fw > 0) fw = 0;
+    //     if (fw > -threshold and fw < 0) fw = 0;
+
+    //     gameObject.position = gameObject.position.add(forward.scale(thrust*speed));
+    //     gameObject.rotation.x -= (r / 50.0) * delta;
+    //     gameObject.rotation.y -= (fw / 50.0) * delta;
+
+    //     std.debug.warn("A: {}, B: {}, X: {}, Y: {}\n", .{
+    //        joystick.isButtonDown(.A),
+    //        joystick.isButtonDown(.B),
+    //        joystick.isButtonDown(.X),
+    //        joystick.isButtonDown(.Y),
+    //     });
+    // }
 }
 
 fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {

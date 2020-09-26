@@ -1,5 +1,4 @@
 pub usingnamespace @cImport({
-    @cInclude("GLFW/glfw3.h");
     @cInclude("GL/gl.h");
 }); 
 

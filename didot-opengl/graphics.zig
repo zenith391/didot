@@ -231,9 +231,9 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
         const yaw = camera.gameObject.rotation.x;
         const pitch = camera.gameObject.rotation.y;
         var direction = zlm.Vec3.new(
-            @cos(yaw) * @cos(pitch),
-            @sin(pitch),
-            @sin(yaw) * @cos(pitch)
+            std.math.cos(yaw) * std.math.cos(pitch),
+            std.math.sin(pitch),
+            std.math.sin(yaw) * std.math.cos(pitch)
         );
         var viewMatrix = zlm.Mat4.createLookAt(
             camera.gameObject.position,

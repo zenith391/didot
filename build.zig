@@ -10,6 +10,9 @@ pub const EngineConfig = struct {
     autoWindow: bool = true
 };
 
+/// hacky workaround some compiler bug
+var graphics_deps: [3]Pkg = undefined;
+
 pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void {
     var allocator = step.builder.allocator;
 
@@ -40,20 +43,23 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     }
     if (std.mem.eql(u8, config.windowModule, "didot-x11")) {
         step.linkSystemLibrary("X11");
+        step.linkSystemLibrary("c"); // (for some reason libc is still needed?)
     }
-
     const window = Pkg {
         .name = "didot-window",
-        //.path = windowPath, // disabled until i find a way to fix the bug
-        .path = config.windowModule ++ "/window.zig",
+        .path = windowPath,
         .dependencies = &[_]Pkg{zlm}
     };
+    graphics_deps[0] = window;
+    graphics_deps[1] = image;
+    graphics_deps[2] = zlm;
 
     const graphics = Pkg {
         .name = "didot-graphics",
         .path = "didot-opengl/graphics.zig",
-        .dependencies = &[_]Pkg{window,image,zlm}
+        .dependencies = &graphics_deps
     };
+    step.linkSystemLibrary("GL");
 
     const objects = Pkg {
         .name = "didot-objects",
@@ -78,8 +84,6 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     step.addPackage(objects);
     step.addPackage(models);
     step.addPackage(app);
-
-    step.linkSystemLibrary("GL");
 }
 
 pub fn build(b: *Builder) !void {
@@ -97,7 +101,7 @@ pub fn build(b: *Builder) !void {
     exe.strip = stripExample;
     exe.install();
 
-    if (@hasField(LibExeObjStep, "emit_docs")) {
+    if (@hasField(LibExeObjStep, "emit_docs") and false) {
         const otest = b.addTest("didot.zig");
         otest.emit_docs = true;
         //otest.emit_bin = false;

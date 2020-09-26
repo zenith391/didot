@@ -80,7 +80,7 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
 fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     const time = @intToFloat(f64, std.time.milliTimestamp());
     const rad = @floatCast(f32, @mod((time/1000.0), std.math.pi*2.0));
-    gameObject.position = Vec3.new(@sin(rad)*10+5, 3, @cos(rad)*10-10);
+    gameObject.position = Vec3.new(std.math.sin(rad)*10+5, 3, std.math.cos(rad)*10-10);
 }
 
 fn init(allocator: *Allocator, app: *Application) !void {
@@ -138,7 +138,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     light.gameObject.material.ambient = Vec3.one;
     try scene.add(light.gameObject);
 
-    std.debug.warn("{} bytes used after init.\n", .{gp.total_requested_bytes});
+    //std.debug.warn("{} bytes used after init.\n", .{gp.total_requested_bytes});
 }
 
 var gp: std.heap.GeneralPurposeAllocator(.{.enable_memory_limit = true}) = undefined;

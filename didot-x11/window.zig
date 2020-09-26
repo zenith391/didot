@@ -146,75 +146,108 @@ pub const Input = struct {
 };
 
 pub const Window = struct {
-    nativeId: *c.Window,
+    nativeDisplay: *c.Display,
+    nativeId: c.Window,
     /// The input context of the window
     input: Input,
+    glCtx: c.GLXContext,
 
     /// Create a new window
     /// By default, the window will be resizable, with empty title and a size of 800x600.
     pub fn create() !Window {
-        var dpy: *c.Display = c.XOpenDisplay(null) orelse return WindowError.InitializationError;
-        var screen = c.DefaultScreen(dpy);
+        if (!@import("builtin").single_threaded) {
+            _ = c.XInitThreads();
+        }
+        const dpy = c.XOpenDisplay(null) orelse return WindowError.InitializationError;
+        const screen = c.DefaultScreen(dpy);
+        const root = c.DefaultRootWindow(dpy);
 
-        var black = c.BlackPixel(dpy, screen);
-        var white = c.WhitePixel(dpy, screen);
-        var window = c.XCreateSimpleWindow(dpy, c.DefaultRootWindow(dpy), 0, 0,
-                200, 100, 0, black, black);
-        c.XMapWindow(dpy, window);
+        const black = c.BlackPixel(dpy, screen);
+        const white = c.WhitePixel(dpy, screen);
+
+        const window = try initGLX(dpy, root, screen);
+        _ = c.XFlush(dpy);
 
         return Window {
             .nativeId = window,
+            .nativeDisplay = dpy,
+            .glCtx = undefined,
             .input = .{
                 
             }
         };
     }
 
+    fn initGLX(dpy: *c.Display, root: c.Window, screen: c_int) !c.Window {
+        var att = [_]c.GLint{c.GLX_RGBA, c.GLX_DEPTH_SIZE, 24, c.GLX_DOUBLEBUFFER, c.None};
+        const visual = c.glXChooseVisual(dpy, screen, &att[0]) orelse return WindowError.InitializationError;
+        const colormap = c.XCreateColormap(dpy, root, visual.*.visual, c.AllocNone);
+        var swa = c.XSetWindowAttributes {
+            .background_pixmap = c.None,
+            .background_pixel = 0,
+            .border_pixmap = c.CopyFromParent,
+            .border_pixel = 0,
+            .bit_gravity = c.ForgetGravity,
+            .win_gravity = c.NorthWestGravity,
+            .backing_store = c.NotUseful,
+            .backing_planes = 1,
+            .backing_pixel = 0,
+            .save_under = 0,
+            .event_mask = 0,
+            .do_not_propagate_mask = 0,
+            .override_redirect = 0,
+            .colormap = colormap,
+            .cursor = c.None
+        };
+        const window = c.XCreateWindow(dpy, root, 0, 0,
+                800, 600, 0, visual.*.depth, c.InputOutput,
+                visual.*.visual, c.CWColormap | c.CWEventMask, &swa);
+        _ = c.XMapWindow(dpy, window);
+        const ctx = c.glXCreateContext(dpy, visual, null, c.GL_TRUE);
+        _ = c.glXMakeCurrent(dpy, window, ctx);
+        return window;
+    }
+
     pub fn setSize(self: *const Window, width: u32, height: u32) void {
-        c.glfwSetWindowSize(self.nativeId, @intCast(c_int, width), @intCast(c_int, height));
+
     }
 
     pub fn setPosition(self: *const Window, x: i32, y: i32) void {
-        c.glfwSetWindowPos(self.nativeId, @intCast(c_int, x), @intCast(c_int, y));
+
     }
 
     pub fn setTitle(self: *const Window, title: [:0]const u8) void {
-        c.glfwSetWindowTitle(self.nativeId, title);
+        _ = c.XStoreName(self.nativeDisplay, self.nativeId, title);
     }
 
     pub fn getPosition(self: *const Window) Vec2 {
         var x: i32 = 0;
         var y: i32 = 0;
-        c.glfwGetWindowPos(self.nativeId, &y, &x);
         return Vec2.new(@intToFloat(f32, x), @intToFloat(f32, y));
     }
 
     pub fn getSize(self: *const Window) Vec2 {
-        var width: i32 = 0;
-        var height: i32 = 0;
-        c.glfwGetWindowSize(self.nativeId, &width, &height);
+        var width: i32 = 1;
+        var height: i32 = 1;
         return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
     }
 
     pub fn getFramebufferSize(self: *const Window) Vec2 {
-        var width: i32 = 0;
-        var height: i32 = 0;
-        c.glfwGetFramebufferSize(self.nativeId, &width, &height);
-        return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
+        var wa: c.XWindowAttributes = undefined;
+        _ = c.XGetWindowAttributes(self.nativeDisplay, self.nativeId, &wa);
+        return Vec2.new(@intToFloat(f32, wa.width), @intToFloat(f32, wa.height));
     }
 
     /// Poll events, swap buffer and update input.
     /// Returns false if the window should be closed and true otherwises.
     pub fn update(self: *Window) bool {
-        c.glfwMakeContextCurrent(self.nativeId);
-        c.glfwSwapBuffers(self.nativeId);
-        c.glfwPollEvents();
-        self.input.update();
-        return c.glfwWindowShouldClose(self.nativeId) == 0;
+        std.time.sleep(16*1000000); // TODO: vsync
+        c.glXSwapBuffers(self.nativeDisplay, self.nativeId);
+        return true;
     }
 
     pub fn deinit(self: *Window) void {
-        c.glfwTerminate();
+        _ = c.glXMakeCurrent(self.nativeDisplay, c.None, null);
     }
 
 };

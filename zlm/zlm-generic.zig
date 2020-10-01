@@ -447,6 +447,14 @@ pub fn specializeOn(comptime Real: type) type {
                 return result;
             }
 
+            pub fn mulVec3(a: Self, b: Vec3) Vec3 {
+                var result: Vec3 = undefined;
+                result.x = b.x * a.fields[0][0] + b.y * a.fields[1][0] + b.z * a.fields[2][0];
+                result.y = b.x * a.fields[0][1] + b.y * a.fields[1][1] + b.z * a.fields[2][1];
+                result.z = b.x * a.fields[0][2] + b.y * a.fields[1][2] + b.z * a.fields[2][2];
+                return result;
+            }
+
             /// transposes the matrix.
             /// this will swap columns with rows.
             pub fn transpose(a: Self) Self {

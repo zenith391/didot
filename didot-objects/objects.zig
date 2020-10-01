@@ -190,9 +190,9 @@ pub const GameObject = struct {
     pub fn getForward(self: *const GameObject) zlm.Vec3 {
         const rot = self.rotation;
         return zlm.Vec3.new(
-            @cos(rot.x) * @cos(rot.y),
-            @sin(rot.y),
-            @sin(rot.x) * @cos(rot.y)
+            std.math.cos(rot.x) * std.math.cos(rot.y),
+            std.math.sin(rot.y),
+            std.math.sin(rot.x) * std.math.cos(rot.y)
         );
     }
 
@@ -200,10 +200,28 @@ pub const GameObject = struct {
     pub fn getLeft(self: *const GameObject) zlm.Vec3 {
         const rot = self.rotation;
         return zlm.Vec3.new(
-            -@sin(rot.x),
+            -std.math.sin(rot.x),
             0,
-            @cos(rot.x)
+            std.math.cos(rot.x)
         );
+    }
+
+    pub fn look(self: *GameObject, direction: zlm.Vec3, up: zlm.Vec3) void {
+        // self.rotation.x = ((std.math.cos(direction.z)) * (std.math.cos(direction.x)) +1)* std.math.pi;
+        // self.rotation.y = (std.math.cos(direction.y) + 1) * std.math.pi;
+        // self.rotation.z = 0;
+        // const mat = zlm.Mat4.createLook(self.position, direction, up);
+        // self.rotation = mat.mulVec3(zlm.Vec3.new(0, 0, 1));
+        // self.rotation.x = (self.rotation.x * self.rotation.z) * std.math.pi;
+        // self.rotation.y = 0;
+        // self.rotation.z = 0;
+
+        var angle = std.math.atan2(f32, direction.y, direction.x);
+        
+    }
+
+    pub fn lookAt(self: *GameObject, target: zlm.Vec3, up: zlm.Vec3) void {
+        self.look(target.sub(self.position).normalize(), up);
     }
 
     /// Add a game object as children to this game object.

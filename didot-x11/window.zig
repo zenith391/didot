@@ -162,9 +162,6 @@ pub const Window = struct {
         const screen = c.DefaultScreen(dpy);
         const root = c.DefaultRootWindow(dpy);
 
-        const black = c.BlackPixel(dpy, screen);
-        const white = c.WhitePixel(dpy, screen);
-
         const window = try initGLX(dpy, root, screen);
         _ = c.XFlush(dpy);
 
@@ -194,7 +191,7 @@ pub const Window = struct {
             .backing_planes = 1,
             .backing_pixel = 0,
             .save_under = 0,
-            .event_mask = 0,
+            .event_mask = c.ExposureMask | c.PointerMotionMask,
             .do_not_propagate_mask = 0,
             .override_redirect = 0,
             .colormap = colormap,
@@ -243,12 +240,22 @@ pub const Window = struct {
     /// Returns false if the window should be closed and true otherwises.
     pub fn update(self: *Window) bool {
         std.time.sleep(16*1000000); // TODO: vsync
+
+        var pending = c.XPending(self.nativeDisplay);
+        var event: c.XEvent = undefined;
+        var i: c_int = 0;
+        while (i < pending) {
+            _ = c.XNextEvent(self.nativeDisplay, &event);
+            i += 1;
+        }
+
         c.glXSwapBuffers(self.nativeDisplay, self.nativeId);
         return true;
     }
 
     pub fn deinit(self: *Window) void {
         _ = c.glXMakeCurrent(self.nativeDisplay, c.None, null);
+        _ = c.XDestroyWindow(self.nativeDisplay, self.nativeId);
     }
 
 };

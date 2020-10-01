@@ -37,11 +37,11 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     }
 
     const windowPath = try std.mem.concat(allocator, u8, &[_][]const u8{windowModule, "/window.zig"});
-    if (std.mem.eql(u8, config.windowModule, "didot-glfw")) {
+    if (std.mem.eql(u8, windowModule, "didot-glfw")) {
         step.linkSystemLibrary("glfw");
         step.linkSystemLibrary("c");
     }
-    if (std.mem.eql(u8, config.windowModule, "didot-x11")) {
+    if (std.mem.eql(u8, windowModule, "didot-x11")) {
         step.linkSystemLibrary("X11");
         step.linkSystemLibrary("c");
     }
@@ -91,11 +91,12 @@ pub fn build(b: *Builder) !void {
     var mode = b.standardReleaseOptions();
     const stripExample = b.option(bool, "strip-example", "Attempt to minify examples by stripping them and changing release mode.") orelse false;
 
-    const exe = b.addExecutable("didot-example-scene", "examples/kart-and-cubes/example-scene.zig");
+    const exe = b.addExecutable("didot-example-scene", "examples/flight-test/flight-sim.zig");
     exe.setTarget(target);
     exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
     try addEngineToExe(exe, .{
-        .windowModule = "didot-x11"
+        //.windowModule = "didot-x11"
+        .autoWindow = false
     });
     exe.single_threaded = stripExample;
     exe.strip = stripExample;

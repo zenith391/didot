@@ -12,7 +12,7 @@ Current provides the following types:
 
 The library is currently built around the OpenGL coordinate system and is fully generic on the basic data type.
 
-*Note: `zlm` has been modified for Didot to add methods like Vec.toRadians()*
+*Note: [`zlm`](https://github.com/ziglibs/zlm) has been modified for Didot to add methods like Vec.toRadians()*
 
 ## Example
 

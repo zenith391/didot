@@ -174,8 +174,7 @@ pub const ShaderProgram = struct {
             }
             var totalSize: usize = @intCast(usize, totalLen);
             const didot_log = std.log.scoped(.didot);
-            didot_log.err("uncorrect shader: ", .{});
-            didot_log.err("{}", .{buf[0..totalSize]});
+            didot_log.err("uncorrect shader:\n {}", .{buf[0..totalSize]});
             return ShaderError.ShaderCompileError;
         }
     }
@@ -221,7 +220,6 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
     c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
     c.glEnable(c.GL_DEPTH_TEST);
     //c.glEnable(c.GL_CULL_FACE);
-    //c.glCullFace(c.GL_FRONT);
     
     if (scene.camera) |camera| {
         var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.001, 100);

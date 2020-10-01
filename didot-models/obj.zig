@@ -75,9 +75,20 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
             while (true) {
                 if (split.next()) |vertex| {
                     var faceSplit = std.mem.split(vertex, "/");
-                    const posIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
-                    const texIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
-                    const normalIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
+                    var posIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
+                    const texIdxStr = faceSplit.next().?;
+                    var texIdx = if (texIdxStr.len == 0) 0 else try std.fmt.parseInt(i32, texIdxStr, 10);
+                    const normalIdxStr = faceSplit.next();
+                    var normalIdx = if (normalIdxStr) |str| try std.fmt.parseInt(i32, str, 10) else 0;
+                    if (normalIdx < 1) {
+                        normalIdx = 1; // TODO
+                    }
+                    if (texIdx < 1) {
+                        texIdx = 1; // TODO
+                    }
+                    if (posIdx < 1) {
+                        posIdx = 1; // TODO
+                    }
                     try elements.append(.{
                         .posIdx = @intCast(usize, posIdx-1),
                         .texIdx = @intCast(usize, texIdx-1),
@@ -97,8 +108,8 @@ pub fn read_obj(allocator: *Allocator, path: []const u8) !Mesh {
     var i: usize = 0;
     for (elements.items) |f| {
         const v = vertices.items[f.posIdx];
-        const t = texCoords.items[f.texIdx];
-        const n = normals.items[f.normalIdx];
+        const t = if (texCoords.items.len == 0) zlm.Vec2.zero else texCoords.items[f.texIdx];
+        const n = if (normals.items.len == 0) zlm.Vec3.zero else normals.items[f.normalIdx];
         // position
         final[i] = v.x;
         final[i+1] = v.y;

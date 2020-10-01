@@ -1,3 +1,4 @@
+//! Space-y exploration "game" with planets, asteroids and space airplanes.
 const std = @import("std");
 const zlm = @import("zlm");
 const Vec3 = zlm.Vec3;
@@ -22,35 +23,36 @@ const Camera = objects.Camera;
 const PointLight = objects.PointLight;
 
 var input: *Input = undefined;
+var airplane: ?*GameObject = undefined;
 
-fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
+fn cameraUpdate(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
+    if (airplane) |plane| {
+        gameObject.position = plane.position.add(zlm.Vec3.new(
+           -9.0,
+           3.0,
+           0.0,
+        ));
+        //gameObject.lookAt(plane.position, zlm.Vec3.new(0, 1, 0));
+        gameObject.rotation = zlm.Vec3.new(0, 0, -15).toRadians();
+    }
+}
+
+fn planeInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     const speed: f32 = 0.1 * delta;
     const forward = gameObject.getForward();
     const left = gameObject.getLeft();
+    airplane = gameObject;
 
-    if (input.isKeyDown(Input.KEY_W)) {
-        gameObject.position = gameObject.position.add(forward.scale(speed));
-    }
-    if (input.isKeyDown(Input.KEY_S)) {
-        gameObject.position = gameObject.position.add(forward.scale(-speed));
-    }
-    if (input.isKeyDown(Input.KEY_A)) {
-        gameObject.position = gameObject.position.add(left.scale(speed));
-    }
-    if (input.isKeyDown(Input.KEY_D)) {
-        gameObject.position = gameObject.position.add(left.scale(-speed));
-    }
+    // if (input.isMouseButtonDown(.Left)) {
+    //     input.setMouseInputMode(.Grabbed);
+    // } else if (input.isKeyDown(Input.KEY_ESCAPE)) {
+    //     input.setMouseInputMode(.Normal);
+    // }
 
-    if (input.isMouseButtonDown(.Left)) {
-        input.setMouseInputMode(.Grabbed);
-    } else if (input.isKeyDown(Input.KEY_ESCAPE)) {
-        input.setMouseInputMode(.Normal);
-    }
-
-    if (input.getMouseInputMode() == .Grabbed) {
-        gameObject.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
-        gameObject.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
-    }
+    // if (input.getMouseInputMode() == .Grabbed) {
+    //     gameObject.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
+    //     gameObject.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
+    // }
 
     if (input.getJoystick(0)) |joystick| {
         const axes = joystick.getRawAxes();
@@ -63,17 +65,9 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
         if (r > -threshold and r < 0) r = 0;
         if (fw < threshold and fw > 0) fw = 0;
         if (fw > -threshold and fw < 0) fw = 0;
-
         gameObject.position = gameObject.position.add(forward.scale(thrust*speed));
         gameObject.rotation.x -= (r / 50.0) * delta;
         gameObject.rotation.y -= (fw / 50.0) * delta;
-
-        std.debug.warn("A: {}, B: {}, X: {}, Y: {}\n", .{
-           joystick.isButtonDown(.A),
-           joystick.isButtonDown(.B),
-           joystick.isButtonDown(.X),
-           joystick.isButtonDown(.Y),
-        });
     }
 }
 
@@ -98,50 +92,24 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var camera = try Camera.create(allocator, shader);
     camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
     camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
-    camera.gameObject.updateFn = cameraInput;
+    camera.gameObject.updateFn = cameraUpdate;
     try scene.add(camera.gameObject);
 
-    var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
-    cube.position = Vec3.new(10, -0.75, -10);
-    cube.scale = Vec3.new(20, 1, 20);
-    cube.material = grassMaterial;
-    try scene.add(cube);
+    var airplaneMesh = try obj.read_obj(allocator, "res/f15.obj");
+    var plane = GameObject.createObject(allocator, airplaneMesh);
+    plane.position = Vec3.new(-1.2, 1.95, -3);
+    plane.updateFn = planeInput;
+    try scene.add(plane);
 
-    var cube2 = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
-    cube2.position = Vec3.new(-1.2, 0.75, -3);
-    cube2.material.ambient = Vec3.new(0.2, 0.1, 0.1);
-    cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
-    try scene.add(cube2);
-
-    var kartMesh = try obj.read_obj(allocator, "res/kart.obj");
-
-    var kart = GameObject.createObject(allocator, kartMesh);
-    kart.position = Vec3.new(0.7, 0.75, -5);
-    try scene.add(kart);
-
-    var i: f32 = 0;
-    while (i < 5) {
-        var j: f32 = 0;
-        while (j < 5) {
-            var kart2 = GameObject.createObject(allocator, kartMesh);
-            kart2.position = Vec3.new(0.7 + (j*8), 0.75, -8 - (i*3));
-            try scene.add(kart2);
-            j += 1;
-        }
-        i += 1;
-    }
-
-    var light = try PointLight.create(allocator);
-    light.gameObject.position = Vec3.new(1, 5, -5);
-    light.gameObject.updateFn = testLight;
-    light.gameObject.mesh = objects.PrimitiveCubeMesh;
-    light.gameObject.material.ambient = Vec3.one;
-    try scene.add(light.gameObject);
-
-    //std.debug.warn("{} bytes used after init.\n", .{gp.total_requested_bytes});
+    // var light = try PointLight.create(allocator);
+    // light.gameObject.position = Vec3.new(1, 5, -5);
+    // light.gameObject.updateFn = testLight;
+    // light.gameObject.mesh = objects.PrimitiveCubeMesh;
+    // light.gameObject.material.ambient = Vec3.one;
+    // try scene.add(light.gameObject);
 }
 
-var gp: std.heap.GeneralPurposeAllocator(.{.enable_memory_limit = true}) = undefined;
+var gp: std.heap.GeneralPurposeAllocator(.{}) = undefined;
 
 pub fn main() !void {
     gp = .{};
@@ -151,9 +119,8 @@ pub fn main() !void {
     const allocator = &gp.allocator;
 
     var scene = try Scene.create(allocator);
-
     var app = Application {
-        .title = "Test Cubes",
+        .title = "Flight Test",
         .initFn = init
     };
     try app.start(allocator, scene);

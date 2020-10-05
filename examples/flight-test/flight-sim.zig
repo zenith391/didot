@@ -83,7 +83,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     const scene = app.scene;
 
     var grassImage = try bmp.read_bmp(allocator, "grass.bmp");
-    var texture = Texture.create(grassImage);
+    var texture = Texture.create2D(grassImage);
     grassImage.deinit(); // it's now uploaded to the GPU, so we can free the image.
     var grassMaterial = Material {
         .texture = texture

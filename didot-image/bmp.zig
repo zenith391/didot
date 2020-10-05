@@ -44,36 +44,37 @@ pub fn read_bmp(allocator: *Allocator, path: []const u8) !Image {
         var importantColors = try reader.readIntLittle(u32);
 
         try file.seekTo(offset);
-        const imgReader = std.io.bufferedReader(file.reader()).reader(); // the input is only buffered now as when seeking the file, the buffer isn't emptied
+        const imgReader = (std.io.BufferedReader(16*1024, @TypeOf(reader)) { 
+            .unbuffered_reader = reader
+        }).reader(); // the input is only buffered now as when seeking the file, the buffer isn't emptied
         const bytesPerPixel = @intCast(i32, bpp/8);
         var data = try allocator.alloc(u8, @intCast(usize, width*height*3)); // data is always in RGB format
 
         var i: i32 = height-1;
         var j: i32 = 0;
+        const bytesPerLine = width * bytesPerPixel;
         while (i >= 0) {
             j = 0;
             while (j < width) {
-                var pos = @intCast(usize, j*bytesPerPixel + i*(width*bytesPerPixel));
+                const pos = @intCast(usize, j*bytesPerPixel + i*bytesPerLine);
 
                 if (bytesPerPixel == 1) {
-                    const gray = try imgReader.readIntLittle(u8);
+                    const gray = try imgReader.readByte();
                     data[pos] = gray;
                     data[pos+1] = gray;
                     data[pos+2] = gray;
                 } else {
-                    const b = try imgReader.readIntLittle(u8);
-                    const g = try imgReader.readIntLittle(u8);
-                    const r = try imgReader.readIntLittle(u8);
+                    const b = try imgReader.readByte();
+                    const g = try imgReader.readByte();
+                    const r = try imgReader.readByte();
                     data[pos] = r;
                     data[pos+1] = g;
                     data[pos+2] = b;
                 }
                 j += 1;
             }
-            var seekBuffer: [4]u8 = undefined;
-            var skipAhead: usize = @intCast(usize, @mod(width, 4));
-            //try file.seekBy(skipAhead);
-            _ = try imgReader.read(seekBuffer[0..skipAhead]);
+            const skipAhead: usize = @intCast(usize, @mod(width, 4));
+            try imgReader.skipBytes(skipAhead, .{});
             i -= 1;
         }
 
@@ -81,7 +82,8 @@ pub fn read_bmp(allocator: *Allocator, path: []const u8) !Image {
             .allocator = allocator,
             .data = data,
             .width = @intCast(usize, width),
-            .height = @intCast(usize, height)
+            .height = @intCast(usize, height),
+            .format = .RGB24
         };
     } else {
         return BMPError.InvalidHeader;

@@ -14,9 +14,18 @@ pub var PrimitivePlaneMesh: Mesh = undefined;
 /// Mesh of a cube.
 pub var PrimitiveCubeMesh: Mesh = undefined;
 
+/// Material must be set manually.
+/// Memory is caller owned
+/// initPrimitives() must have been called before calling this function!
+pub fn createSkybox(allocator: *Allocator) !GameObject {
+    var go = GameObject.createCustom(allocator, "skybox", 0);
+    go.mesh = PrimitiveCubeMesh;
+    return go;
+}
+
 /// This function must be called before primitive meshes (like PrimitiveCubeMesh) can be used.
 /// Since it create meshes it must be called after the window context is set.
-/// It is also automatically called by didot-app.Application.
+/// It is also automatically called by didot-app.Application
 pub fn initPrimitives() void {
     var planeVert = [_]f32 {
         -0.5, 0.5, 0.0, 0.0, 0.0,
@@ -233,7 +242,9 @@ pub const GameObject = struct {
     pub fn deinit(self: *const GameObject) void {
         self.childrens.deinit();
         if (self.objectAllocator) |alloc| {
-            alloc.destroy(@intToPtr(*u8, self.objectPointer));
+            if (self.objectPointer != 0) {
+                alloc.destroy(@intToPtr(*u8, self.objectPointer));
+            }
         }
     }
 
@@ -251,6 +262,7 @@ pub const Camera = struct {
     gameObject: GameObject,
     viewMatrix: zlm.Mat4,
     shader: graphics.ShaderProgram,
+    skyboxShader: ?graphics.ShaderProgram,
 
     /// Memory is caller-owned (de-init must be called before)
     pub fn create(allocator: *Allocator, shader: graphics.ShaderProgram) !*Camera {
@@ -297,6 +309,11 @@ pub const Scene = struct {
     /// on top-level game objects to select one that corresponds
     /// to the "camera" type.
     camera: ?*Camera,
+    /// The skybox the scene is currently using.
+    /// It is auto-detected at runtime before each render by looking
+    /// on top-level game objects to select one that corresponds
+    /// to the "skybox" type.
+    skybox: ?*GameObject,
     pointLight: ?*PointLight,
 
     pub fn create(allocator: *Allocator) !*Scene {
@@ -326,15 +343,18 @@ pub const Scene = struct {
 
         // TODO: only do this when a new child is inserted
         self.camera = null;
+        self.skybox = null;
         self.pointLight = null;
-        for (childs.items) |child| {
+        for (childs.items) |*child| {
             if (child.objectType) |objectType| {
                 if (std.mem.eql(u8, objectType, "camera")) {
                     self.camera = @intToPtr(*Camera, child.objectPointer);
-                    self.camera.?.gameObject = child;
+                    self.camera.?.gameObject = child.*;
                 } else if (std.mem.eql(u8, objectType, "point_light")) {
                     self.pointLight = @intToPtr(*PointLight, child.objectPointer);
-                    self.pointLight.?.gameObject = child;
+                    self.pointLight.?.gameObject = child.*;
+                } else if (std.mem.eql(u8, objectType, "skybox")) {
+                    self.skybox = child;
                 }
             }
         }

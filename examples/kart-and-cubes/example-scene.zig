@@ -83,13 +83,45 @@ fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     gameObject.position = Vec3.new(std.math.sin(rad)*10+5, 3, std.math.cos(rad)*10-10);
 }
 
+fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
+    var skyboxShader = try ShaderProgram.create(@embedFile("skybox-vert.glsl"), @embedFile("skybox-frag.glsl"));
+    camera.*.skyboxShader = skyboxShader;
+    var top = try bmp.read_bmp(allocator, "res/skybox/top.bmp");
+    var bottom = try bmp.read_bmp(allocator, "res/skybox/bottom.bmp");
+    var right = try bmp.read_bmp(allocator, "res/skybox/right.bmp");
+    var left = try bmp.read_bmp(allocator, "res/skybox/left.bmp");
+    var back = try bmp.read_bmp(allocator, "res/skybox/back.bmp");
+    var front = try bmp.read_bmp(allocator, "res/skybox/front.bmp");
+    var texture = Texture.createCubemap(.{
+        .front = front,
+        .back = back,
+        .left = left,
+        .right = right,
+        .top = top,
+        .bottom = bottom
+    });
+    front.deinit();
+    back.deinit();
+    left.deinit();
+    right.deinit();
+    top.deinit();
+    bottom.deinit();
+
+    var skyboxMaterial = Material {
+        .texture = texture
+    };
+    var skybox = try objects.createSkybox(allocator);
+    skybox.material = skyboxMaterial;
+    return skybox;
+}
+
 fn init(allocator: *Allocator, app: *Application) !void {
     input = &app.window.input;
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
     const scene = app.scene;
 
-    var grassImage = try bmp.read_bmp(allocator, "grass.bmp");
-    var texture = Texture.create(grassImage);
+    var grassImage = try bmp.read_bmp(allocator, "res/grass.bmp");
+    var texture = Texture.create2D(grassImage);
     grassImage.deinit(); // it's now uploaded to the GPU, so we can free the image.
     var grassMaterial = Material {
         .texture = texture
@@ -100,6 +132,9 @@ fn init(allocator: *Allocator, app: *Application) !void {
     camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
     camera.gameObject.updateFn = cameraInput;
     try scene.add(camera.gameObject);
+
+    var skybox = try loadSkybox(allocator, camera);
+    try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
     cube.position = Vec3.new(10, -0.75, -10);

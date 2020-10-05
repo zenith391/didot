@@ -91,7 +91,7 @@ pub fn build(b: *Builder) !void {
     var mode = b.standardReleaseOptions();
     const stripExample = b.option(bool, "strip-example", "Attempt to minify examples by stripping them and changing release mode.") orelse false;
 
-    const exe = b.addExecutable("didot-example-scene", "examples/flight-test/flight-sim.zig");
+    const exe = b.addExecutable("didot-example-scene", "examples/kart-and-cubes/example-scene.zig");
     exe.setTarget(target);
     exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
     try addEngineToExe(exe, .{

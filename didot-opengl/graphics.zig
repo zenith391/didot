@@ -126,8 +126,12 @@ pub const ShaderProgram = struct {
         };
     }
 
+    pub inline fn bind(self: *const ShaderProgram) void {
+        c.glUseProgram(self.id);
+    }
+
     /// Set an OpenGL uniform to the following 4x4 matrix.
-    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, mat: zlm.Mat4) void {
+    pub fn setUniformMat4(self: *const ShaderProgram, name: [:0]const u8, mat: zlm.Mat4) void {
         var uniform = c.glGetUniformLocation(self.id, name);
 
         var m = mat.fields;
@@ -182,17 +186,55 @@ pub const ShaderProgram = struct {
 
 const Image = @import("didot-image").Image;
 
+pub const CubemapSettings = struct {
+    right: Image,
+    left: Image,
+    top: Image,
+    bottom: Image,
+    front: Image,
+    back: Image
+};
+
 pub const Texture = struct {
     id: c.GLuint,
 
-    pub fn create(image: Image) Texture {
+    pub fn createCubemap(cb: CubemapSettings) Texture {
+        var id: c.GLuint = undefined;
+        c.glGenTextures(1, &id);
+        c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, id);
+        c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
+        c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
+        c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
+        const targets = [_]c.GLint {
+            c.GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+            c.GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+            c.GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+        };
+        comptime var i = 0;
+        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
+            const image = @field(cb, field.name);
+            c.glTexImage2D(targets[i], 0, c.GL_RGB,
+                @intCast(c_int, image.width), @intCast(c_int, image.height),
+                0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
+            i += 1;
+        }
+        c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, 0);
+        return Texture {
+            .id = id
+        };
+    }
+
+    pub fn create2D(image: Image) Texture {
         var id: c.GLuint = undefined;
         c.glGenTextures(1, &id);
         c.glBindTexture(c.GL_TEXTURE_2D, id);
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGBA,
+        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGB,
             @intCast(c_int, image.width), @intCast(c_int, image.height),
             0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
         c.glBindTexture(c.GL_TEXTURE_2D, 0);
@@ -201,8 +243,12 @@ pub const Texture = struct {
         };
     }
 
-    pub fn deinit(self: *Texture) void {
-        c.glDeleteTextures(1, &selF.id);
+    pub inline fn bind(self: *const Texture) void {
+        c.glBindTexture(c.GL_TEXTURE_2D, self.id);
+    }
+
+    pub fn deinit(self: *const Texture) void {
+        c.glDeleteTextures(1, &self.id);
     }
 
 };
@@ -228,18 +274,28 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
         // create the direction vector to be used with the view matrix.
         const yaw = camera.gameObject.rotation.x;
         const pitch = camera.gameObject.rotation.y;
-        var direction = zlm.Vec3.new(
+        const direction = zlm.Vec3.new(
             std.math.cos(yaw) * std.math.cos(pitch),
             std.math.sin(pitch),
             std.math.sin(yaw) * std.math.cos(pitch)
         );
-        var viewMatrix = zlm.Mat4.createLookAt(
+        const viewMatrix = zlm.Mat4.createLookAt(
             camera.gameObject.position,
             camera.gameObject.position.add(direction),
             zlm.Vec3.new(0.0, 1.0, 0.0)
         );
-        camera.shader.setUniformMat4("viewMatrix", viewMatrix);
+        if (scene.skybox) |skybox| {
+            if (camera.skyboxShader) |skyboxShader| {
+                skyboxShader.bind();
+                const view = viewMatrix.toMat3().toMat4();
+                skyboxShader.setUniformMat4("view", view);
+                skyboxShader.setUniformMat4("projection", projMatrix);
+                renderSkybox(skybox, camera);
+            }
+        }
 
+        camera.shader.bind();
+        camera.shader.setUniformMat4("viewMatrix", viewMatrix);
         if (scene.pointLight) |light| {
             camera.shader.setUniformVec3("light.position", light.gameObject.position);
             camera.shader.setUniformVec3("light.color", light.color);
@@ -255,13 +311,37 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
     }
 }
 
+fn renderSkybox(skybox: *GameObject, camera: *Camera) void {
+    if (skybox.mesh) |mesh| {
+        c.glDepthMask(c.GL_FALSE);
+        c.glBindVertexArray(mesh.vao);
+        const material = skybox.material;
+
+        if (material.texture) |texture| {
+            c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
+        }
+
+        if (mesh.hasEbo) {
+            c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
+        } else {
+            c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
+        }
+        c.glDepthMask(c.GL_TRUE);
+    }
+}
+
 fn renderObject(gameObject: GameObject, camera: *Camera) void {
+    if (gameObject.objectType) |custom| {
+        if (std.mem.eql(u8, custom, "skybox")) {
+            return; // don't render skybox here
+        }
+    }
     if (gameObject.mesh) |mesh| {
         c.glBindVertexArray(mesh.vao);
         var material = gameObject.material;
 
         if (material.texture) |texture| {
-            c.glBindTexture(c.GL_TEXTURE_2D, texture.id);
+            texture.bind();
             camera.shader.setUniformBool("useTex", true);
         } else {
             camera.shader.setUniformBool("useTex", false);

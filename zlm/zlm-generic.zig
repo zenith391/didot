@@ -181,7 +181,7 @@ pub fn specializeOn(comptime Real: type) type {
 
             usingnamespace VectorMixin(Self);
 
-            pub fn new(x: Real, y: Real) Self {
+            pub inline fn new(x: Real, y: Real) Self {
                 return Self{
                     .x = x,
                     .y = y,
@@ -227,7 +227,7 @@ pub fn specializeOn(comptime Real: type) type {
 
             usingnamespace VectorMixin(Self);
 
-            pub fn new(x: Real, y: Real, z: Real) Self {
+            pub inline fn new(x: Real, y: Real, z: Real) Self {
                 return Self{
                     .x = x,
                     .y = y,
@@ -333,7 +333,7 @@ pub fn specializeOn(comptime Real: type) type {
 
             usingnamespace VectorMixin(Self);
 
-            pub fn new(x: Real, y: Real, z: Real, w: Real) Self {
+            pub inline fn new(x: Real, y: Real, z: Real, w: Real) Self {
                 return Self{
                     .x = x,
                     .y = y,
@@ -394,6 +394,20 @@ pub fn specializeOn(comptime Real: type) type {
                     [3]Real{ 0, 0, 1 },
                 },
             };
+
+            pub fn toMat4(a: Mat3) Mat4 {
+                var result: Mat4 = undefined;
+                inline for ([_]comptime_int{ 0, 1, 2, 3 }) |row| {
+                    inline for ([_]comptime_int{ 0, 1, 2, 3 }) |col| {
+                        if (row == 3 or col == 3) {
+                            result.fields[row][col] = if (row == 3 and col == 3) 1 else 0;
+                        } else {
+                            result.fields[row][col] = a.fields[row][col];
+                        }
+                    }
+                }
+                return result;
+            }
         };
 
         /// 4 by 4 matrix type.
@@ -447,11 +461,24 @@ pub fn specializeOn(comptime Real: type) type {
                 return result;
             }
 
-            pub fn mulVec3(a: Self, b: Vec3) Vec3 {
-                var result: Vec3 = undefined;
-                result.x = b.x * a.fields[0][0] + b.y * a.fields[1][0] + b.z * a.fields[2][0];
-                result.y = b.x * a.fields[0][1] + b.y * a.fields[1][1] + b.z * a.fields[2][1];
-                result.z = b.x * a.fields[0][2] + b.y * a.fields[1][2] + b.z * a.fields[2][2];
+            /// copy this matrix to a new one
+            pub fn copy(a: Self) Self {
+                var result: Self = undefined;
+                inline for ([_]comptime_int{ 0, 1, 2, 3 }) |row| {
+                    inline for ([_]comptime_int{ 0, 1, 2, 3 }) |col| {
+                        result.fields[row][col] = a.fields[row][col];
+                    }
+                }
+                return result;
+            }
+
+            pub fn toMat3(a: Self) Mat3 {
+                var result: Mat3 = undefined;
+                inline for ([_]comptime_int{ 0, 1, 2 }) |row| {
+                    inline for ([_]comptime_int{ 0, 1, 2 }) |col| {
+                        result.fields[row][col] = a.fields[row][col];
+                    }
+                }
                 return result;
             }
 
@@ -620,17 +647,17 @@ pub fn specializeOn(comptime Real: type) type {
         };
 
         /// constructs a new Vec2.
-        pub fn vec2(x: Real, y: Real) Vec2 {
+        pub inline fn vec2(x: Real, y: Real) Vec2 {
             return Vec2.new(x, y);
         }
 
         /// constructs a new Vec3.
-        pub fn vec3(x: Real, y: Real, z: Real) Vec3 {
+        pub inline fn vec3(x: Real, y: Real, z: Real) Vec3 {
             return Vec3.new(x, y, z);
         }
 
         /// constructs a new Vec4.
-        pub fn vec4(x: Real, y: Real, z: Real, w: Real) Vec4 {
+        pub inline fn vec4(x: Real, y: Real, z: Real, w: Real) Vec4 {
             return Vec4.new(x, y, z, w);
         }
     };

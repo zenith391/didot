@@ -6,7 +6,8 @@ const Allocator = std.mem.Allocator;
 const graphics = @import("didot-graphics");
 const objects = @import("didot-objects");
 const models = @import("didot-models");
-const bmp = @import("didot-image").bmp;
+const image = @import("didot-image");
+const bmp = image.bmp;
 const obj = models.obj;
 const Application = @import("didot-app").Application;
 
@@ -68,12 +69,12 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
         gameObject.rotation.x -= (r / 50.0) * delta;
         gameObject.rotation.y -= (fw / 50.0) * delta;
 
-        std.debug.warn("A: {}, B: {}, X: {}, Y: {}\n", .{
-           joystick.isButtonDown(.A),
-           joystick.isButtonDown(.B),
-           joystick.isButtonDown(.X),
-           joystick.isButtonDown(.Y),
-        });
+        // std.debug.warn("A: {}, B: {}, X: {}, Y: {}\n", .{
+        //    joystick.isButtonDown(.A),
+        //    joystick.isButtonDown(.B),
+        //    joystick.isButtonDown(.X),
+        //    joystick.isButtonDown(.Y),
+        // });
     }
 }
 
@@ -120,7 +121,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
     const scene = app.scene;
 
-    var grassImage = try bmp.read_bmp(allocator, "res/grass.bmp");
+    var grassImage = try image.png.read_png(allocator, "res/grass.png");
     var texture = Texture.create2D(grassImage);
     grassImage.deinit(); // it's now uploaded to the GPU, so we can free the image.
     var grassMaterial = Material {
@@ -133,8 +134,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     camera.gameObject.updateFn = cameraInput;
     try scene.add(camera.gameObject);
 
-    var skybox = try loadSkybox(allocator, camera);
-    try scene.add(skybox);
+    //var skybox = try loadSkybox(allocator, camera);
+    //try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
     cube.position = Vec3.new(10, -0.75, -10);

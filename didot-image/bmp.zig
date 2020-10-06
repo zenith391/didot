@@ -53,29 +53,39 @@ pub fn read_bmp(allocator: *Allocator, path: []const u8) !Image {
         var i: i32 = height-1;
         var j: i32 = 0;
         const bytesPerLine = width * bytesPerPixel;
-        while (i >= 0) {
-            j = 0;
-            while (j < width) {
-                const pos = @intCast(usize, j*bytesPerPixel + i*bytesPerLine);
 
-                if (bytesPerPixel == 1) {
+        if (bytesPerPixel == 1) {
+            while (i >= 0) {
+                j = 0;
+                while (j < width) {
+                    const pos = @intCast(usize, j + i*bytesPerLine);
                     const gray = try imgReader.readByte();
                     data[pos] = gray;
                     data[pos+1] = gray;
                     data[pos+2] = gray;
-                } else {
+                    j += 3;
+                }
+                const skipAhead: usize = @intCast(usize, @mod(width, 4));
+                try imgReader.skipBytes(skipAhead, .{});
+                i -= 1;
+            }
+        } else {
+            while (i >= 0) {
+                j = 0;
+                while (j < bytesPerLine) {
+                    const pos = @intCast(usize, j + i*bytesPerLine);
                     const b = try imgReader.readByte();
                     const g = try imgReader.readByte();
                     const r = try imgReader.readByte();
                     data[pos] = r;
                     data[pos+1] = g;
                     data[pos+2] = b;
+                    j += 3; // 3 bytes per pixel
                 }
-                j += 1;
+                const skipAhead: usize = @intCast(usize, @mod(width, 4));
+                try imgReader.skipBytes(skipAhead, .{});
+                i -= 1;
             }
-            const skipAhead: usize = @intCast(usize, @mod(width, 4));
-            try imgReader.skipBytes(skipAhead, .{});
-            i -= 1;
         }
 
         return Image {

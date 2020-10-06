@@ -1,4 +1,5 @@
 pub const bmp = @import("bmp.zig");
+pub const png = @import("png.zig");
 const Allocator = @import("std").mem.Allocator;
 
 pub const ImageFormat = enum {

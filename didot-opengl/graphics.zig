@@ -216,7 +216,7 @@ pub const Texture = struct {
         comptime var i = 0;
         inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
             const image = @field(cb, field.name);
-            c.glTexImage2D(targets[i], 0, c.GL_RGB,
+            c.glTexImage2D(targets[i], 0, c.GL_SRGB,
                 @intCast(c_int, image.width), @intCast(c_int, image.height),
                 0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
             i += 1;
@@ -232,9 +232,9 @@ pub const Texture = struct {
         c.glGenTextures(1, &id);
         c.glBindTexture(c.GL_TEXTURE_2D, id);
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_RGB,
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_NEAREST);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_NEAREST);
+        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB,
             @intCast(c_int, image.width), @intCast(c_int, image.height),
             0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
         c.glBindTexture(c.GL_TEXTURE_2D, 0);
@@ -265,6 +265,7 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
     c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
     c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
     c.glEnable(c.GL_DEPTH_TEST);
+    c.glEnable(c.GL_FRAMEBUFFER_SRGB);
     //c.glEnable(c.GL_CULL_FACE);
     
     if (scene.camera) |camera| {

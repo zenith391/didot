@@ -16,7 +16,7 @@ const Chunk = struct {
     length: u32,
     type: []const u8,
     data: []const u8,
-    reader: ChunkStream.Reader,
+    stream: ChunkStream,
     crc: u32,
     allocator: *Allocator,
 
@@ -28,20 +28,18 @@ const Chunk = struct {
     // fancy Zig reflection for basically loading the chunk into a struct
     // for the experienced: this method is necessary instead of a simple @bitCast because of endianess, as
     // PNG uses big-endian.
-    pub fn toStruct(self: *const Chunk, comptime T: type) T {
+    pub fn toStruct(self: *Chunk, comptime T: type) T {
         var result: T = undefined;
+        std.debug.warn("{}\n", .{self.stream});
         inline for (@typeInfo(T).Struct.fields) |field| {
             const fieldInfo = @typeInfo(field.field_type);
             switch (fieldInfo) {
                 .Int => {
-                    // overflow here
-                    std.debug.print("5\n", .{});
-                    const f = self.reader.readIntBig(field.field_type) catch unreachable;
-                    std.debug.print("6\n", .{});
+                    const f = self.stream.reader().readIntBig(field.field_type) catch unreachable;
                     @field(result, field.name) = f;
                 },
                 .Enum => |e| {
-                    const id = self.reader.readIntBig(e.tag_type) catch unreachable;
+                    const id = self.stream.reader().readIntBig(e.tag_type) catch unreachable;
                     @field(result, field.name) = @intToEnum(field.field_type, id);
                 },
                 else => unreachable
@@ -63,6 +61,7 @@ const CompressionMethod = enum(u8) {
     Deflate = 0,
 };
 
+// Struct for the IHDR chunk, which contains most of metadata about the image.
 const IHDR = struct {
     width: u32,
     height: u32,
@@ -81,25 +80,26 @@ fn readChunk(allocator: *Allocator, reader: anytype) !Chunk {
     _ = try reader.readAll(data);
 
     const crc = try reader.readIntBig(u32);
+    var stream = ChunkStream {
+        .buffer = data,
+        .pos = 0
+    };
 
     return Chunk {
         .length = length,
         .type = chunkType,
         .data = data,
-        .reader = (ChunkStream {
-            .buffer = data,
-            .pos = 0
-        }).reader(),
+        .stream = stream,
         .crc = crc,
         .allocator = allocator
     };
 }
 
-fn filterNone(image: []const u8, sample: u8, x: usize, y: usize, width: usize, height: usize, pos: usize) u8 {
+fn filterNone(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
     return sample;
 }
 
-fn filterSub(image: []const u8, sample: u8, x: usize, y: usize, width: usize, height: usize, pos: usize) u8 {
+fn filterSub(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
     if (x < 3) {
         return sample;
     } else {
@@ -107,7 +107,7 @@ fn filterSub(image: []const u8, sample: u8, x: usize, y: usize, width: usize, he
     }
 }
 
-fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, height: usize, pos: usize) u8 {
+fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
     if (y == 0) {
         return sample;
     } else {
@@ -115,7 +115,7 @@ fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, hei
     }
 }
 
-fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize, height: usize, pos: usize) u8 {
+fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
     var val: u9 = if (x > 3) image[pos-3] else 0; // val = a
     if (y > 0) {
         val += image[pos-width]; // val = a + b
@@ -123,7 +123,7 @@ fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize
     return sample +% @intCast(u8, val / 2);
 }
 
-fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, height: usize, pos: usize) u8 {
+fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
     const a: i32 = if (x > 3) image[pos-3] else 0;
     const b: i32 = if (y > 0) image[pos-width] else 0;
     const c: i32 = if (x > 3 and y > 0) image[pos-width-3] else 0;
@@ -161,7 +161,7 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
     }
     std.debug.print("2\n", .{});
 
-    const ihdrChunk = try readChunk(allocator, reader);
+    var ihdrChunk = try readChunk(allocator, reader);
     std.debug.print("3\n", .{});
     defer ihdrChunk.deinit();
     if (!std.mem.eql(u8, ihdrChunk.type, "IHDR")) {
@@ -228,9 +228,9 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
                 const r = try idatReader.readByte();
                 const g = try idatReader.readByte();
                 const b = try idatReader.readByte();
-                imageData[pos] = filter(imageData, r, x, y, bytesPerLine, ihdr.height, pos);
-                imageData[pos+1] = filter(imageData, g, x+1, y, bytesPerLine, ihdr.height, pos+1);
-                imageData[pos+2] = filter(imageData, b, x+2, y, bytesPerLine, ihdr.height, pos+2);
+                imageData[pos] = filter(imageData, r, x, y, bytesPerLine, pos);
+                imageData[pos+1] = filter(imageData, g, x+1, y, bytesPerLine, pos+1);
+                imageData[pos+2] = filter(imageData, b, x+2, y, bytesPerLine, pos+2);
                 x += 3; // since we use 3 bytes per pixel, let's directly increment X by 3
                 // (that optimisation is also useful in the filter method)
             }

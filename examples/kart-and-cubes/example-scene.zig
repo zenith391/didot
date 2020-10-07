@@ -134,8 +134,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     camera.gameObject.updateFn = cameraInput;
     try scene.add(camera.gameObject);
 
-    //var skybox = try loadSkybox(allocator, camera);
-    //try scene.add(skybox);
+    var skybox = try loadSkybox(allocator, camera);
+    try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
     cube.position = Vec3.new(10, -0.75, -10);

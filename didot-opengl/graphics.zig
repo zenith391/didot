@@ -1,6 +1,7 @@
 const c = @import("c.zig");
 const std = @import("std");
 const zlm = @import("zlm");
+const Allocator = std.mem.Allocator;
 
 pub const ShaderError = error {
     ShaderCompileError,
@@ -84,6 +85,28 @@ pub const ShaderProgram = struct {
     vao: c.GLuint,
     vertex: c.GLuint,
     fragment: c.GLuint,
+
+    pub fn createFromFile(allocator: *Allocator, vertPath: []const u8, fragPath: []const u8) !ShaderProgram {
+        const vertFile = try std.fs.cwd().openFile(vertPath, .{
+            .read = true
+        });
+        const vert = try vertFile.reader().readAllAlloc(allocator, std.math.maxInt(u64));
+        const nullVert = try allocator.dupeZ(u8, vert); // null-terminated string
+        allocator.free(vert);
+        defer allocator.free(nullVert);
+        vertFile.close();
+
+        const fragFile = try std.fs.cwd().openFile(fragPath, .{
+            .read = true
+        });
+        const frag = try fragFile.reader().readAllAlloc(allocator, std.math.maxInt(u64));
+        const nullFrag = try allocator.dupeZ(u8, frag);
+        allocator.free(frag);
+        defer allocator.free(nullFrag);
+        fragFile.close();
+
+        return try ShaderProgram.create(nullVert, nullFrag);
+    }
 
     pub fn create(vert: [:0]const u8, frag: [:0]const u8) ShaderError!ShaderProgram {
         const vertexShader = c.glCreateShader(c.GL_VERTEX_SHADER);
@@ -269,7 +292,7 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
     //c.glEnable(c.GL_CULL_FACE);
     
     if (scene.camera) |camera| {
-        var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.001, 100);
+        var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.01, 100);
         camera.shader.setUniformMat4("projMatrix", projMatrix);
 
         // create the direction vector to be used with the view matrix.

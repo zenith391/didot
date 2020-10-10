@@ -1,0 +1,70 @@
+{
+	"objects": [
+		{
+			"type": "Camera",
+			"name": "Camera",
+			"position": [1.5, 1.5, -0.5],
+			"rotation": [-120, -15, 0],
+			"shaders": {
+				"default": "Shaders/Default"
+			}
+		},
+		{
+			"type": "PointLight",
+			"name": "Light",
+			"position": [1, 5, -5],
+			"mesh": "Meshes/Primitives/Cube",
+			"update": "testLight",
+			"material": {
+				"ambient": [1, 1, 1]
+			}
+		},
+		{
+			"type": "Normal",
+			"name": "Kart",
+			"position": [0.7, 0.75, -5],
+			"mesh": "Meshes/Kart"
+		},
+		{
+			"type": "Normal",
+			"position": [10, -0.75, -10],
+			"scale": [20, 1, 20],
+			"mesh": "Meshes/Primitives/Cube",
+			"material": {
+				"texture": "Textures/Grass Texture"
+			}
+		},
+		{
+			"type": "Normal",
+			"position": [-1.2, 0.75, 3],
+			"mesh": "Meshes/Primitives/Cube",
+			"material": {
+				"ambient": [0.2, 0.1, 0.1],
+				"diffuse": [0.8, 0.8, 0.8]
+			}
+		}
+	],
+	"assets": {
+		"Textures/Grass Texture": {
+			"texture": {
+				"path": "res/grass.bmp",
+				"format": "bmp"
+			}
+		},
+		"Shaders/Default": {
+			"shader": {
+				"vertex": "res/shaders/vert.glsl",
+				"fragment": "res/shaders/frag.glsl"
+			}
+		},
+		"Shaders/Skybox": {
+			"shader": {
+				"vertex": "res/shaders/skybox-vert.glsl",
+				"fragment": "res/shaders/skybox-frag.glsl"
+			}
+		}
+	},
+	"settings": {
+		"maxPointLights": 1
+	}
+}

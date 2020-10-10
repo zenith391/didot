@@ -30,7 +30,6 @@ const Chunk = struct {
     // PNG uses big-endian.
     pub fn toStruct(self: *Chunk, comptime T: type) T {
         var result: T = undefined;
-        std.debug.warn("{}\n", .{self.stream});
         inline for (@typeInfo(T).Struct.fields) |field| {
             const fieldInfo = @typeInfo(field.field_type);
             switch (fieldInfo) {
@@ -128,7 +127,7 @@ fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, 
     const b: i32 = if (y > 0) image[pos-width] else 0;
     const c: i32 = if (x > 3 and y > 0) image[pos-width-3] else 0;
 
-    const p = a + b - c;
+    const p: i32 = a + b - c;
     // the minimum value of p is -255, minus the minimum value of a/b/c, the minimum result is -510, so using unreachable is safe
     const pa = std.math.absInt(p - a) catch unreachable;
     const pb = std.math.absInt(p - b) catch unreachable;
@@ -144,35 +143,24 @@ fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, 
 }
 
 pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
-    const cwd = std.fs.cwd();
-    const file = try cwd.openFile(path, .{
-        .read = true,
-        .write = false
-    });
+    const file = try std.fs.cwd().openFile(path, .{ .read = true });
     const unbufferedReader = file.reader();
-    const reader = (std.io.BufferedReader(16*1024, @TypeOf(unbufferedReader)) { 
+    var bufferedReader = std.io.BufferedReader(16*1024, @TypeOf(unbufferedReader)) { 
         .unbuffered_reader = unbufferedReader
-    }).reader();
-    std.debug.print("1\n", .{});
-    var signature = reader.readBytesNoEof(8) catch return error.UnsupportedFormat;
+    };
+    const reader = bufferedReader.reader();
 
+    var signature = reader.readBytesNoEof(8) catch return error.UnsupportedFormat;
     if (!std.mem.eql(u8, signature[0..], "\x89PNG\r\n\x1A\n")) {
         return error.UnsupportedFormat;
     }
-    std.debug.print("2\n", .{});
 
     var ihdrChunk = try readChunk(allocator, reader);
-    std.debug.print("3\n", .{});
     defer ihdrChunk.deinit();
     if (!std.mem.eql(u8, ihdrChunk.type, "IHDR")) {
         return error.InvalidHeader; // first chunk must ALWAYS be IHDR
     }
-    std.debug.print("4\n", .{});
     const ihdr = ihdrChunk.toStruct(IHDR);
-    std.debug.print("5\n", .{});
-    std.debug.warn("bit depth: {}\n", .{ihdr.bitDepth});
-    std.debug.warn("color type: {}\n", .{ihdr.colorType});
-    std.debug.warn("interlace: {}\n", .{ihdr.interlaceMethod});
 
     if (ihdr.filterMethod != 0) {
         // there's only one filter method declared in the PNG specification
@@ -186,18 +174,19 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
 
     while (true) {
         const chunk = try readChunk(allocator, reader);
-        //std.debug.warn("chunk type: {}\n", .{chunk.type});
         defer chunk.deinit();
 
         if (std.mem.eql(u8, chunk.type, "IEND")) {
             break;
         } else if (std.mem.eql(u8, chunk.type, "IDAT")) { // image data
             const pos = idatData.len;
+            // in PNG files, there can be multiple IDAT chunks, and their data must all be concatenated.
             idatData = try allocator.realloc(idatData, idatData.len + chunk.data.len);
             std.mem.copy(u8, idatData[pos..], chunk.data);
         }
     }
 
+    // the following lines create a zlib stream over our concatenated data from IDAT chunks.
     var idatStream = std.io.FixedBufferStream([]u8) {
         .buffer = idatData,
         .pos = 0
@@ -205,6 +194,8 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
     var zlibStream = try std.compress.zlib.zlibStream(allocator, idatStream.reader());
     defer zlibStream.deinit();
     const idatReader = zlibStream.reader();
+
+    // allocate image data (TODO: support more than RGB)
     const imageData = try allocator.alloc(u8, ihdr.width*ihdr.height*3);
 
     if (ihdr.colorType == .Truecolor) {
@@ -213,7 +204,8 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
         const bytesPerLine = ihdr.width * 3;
         while (y < ihdr.height) {
             x = 0;
-            const filterType = try idatReader.readByte(); // in PNG files, each scanlines have a filter, it is used to compress more.
+            // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
+            const filterType = try idatReader.readByte();
             const filter = switch(filterType) {
                 0 => filterNone,
                 1 => filterSub,
@@ -222,7 +214,6 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
                 4 => filterPaeth,
                 else => return error.InvalidFilter
             };
-            std.debug.warn("filter: {}\n", .{filterType});
             while (x < bytesPerLine) {
                 const pos = y*bytesPerLine + x;
                 const r = try idatReader.readByte();

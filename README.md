@@ -11,6 +11,23 @@ This also works for windowing backend, so by using `didot-x11` (still WIP) inste
 
 [API reference](https://zenith391.github.io/didot/#root)
 
+## Features
+- OpenGL backend
+  - Shaders
+  - Meshes
+  - Materials
+  - Textures
+- Windowing
+  - GLFW backend
+  - X11 backend
+- Model loader
+  - OBJ files
+- Image loader
+  - BMP files
+  - PNG files
+- Application system for easier use
+- Game objects system
+
 ## Examples
 
 Cube:

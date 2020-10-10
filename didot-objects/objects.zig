@@ -132,10 +132,9 @@ pub fn initPrimitives() void {
 
 pub const GameObject = struct {
     mesh: ?Mesh = null,
+    name: []const u8 = "Game Object",
     /// Functions called regularly depending on the updateTarget value of the Application.
     updateFn: ?fn(allocator: *Allocator, gameObject: *GameObject, delta: f32) anyerror!void = null,
-    // Model matrix
-    matrix: zlm.Mat4,
     position: zlm.Vec3 = zlm.Vec3.zero,
     /// In order: yaw, pitch, roll.
     /// Note: this will be replaced with quaternions very soon!
@@ -155,9 +154,7 @@ pub const GameObject = struct {
     /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
     pub fn createEmpty(allocator: *Allocator) GameObject {
         var childs = GameObjectArrayList.init(allocator);
-        var matrix = zlm.Mat4.identity;
         return GameObject {
-            .matrix = matrix,
             .childrens = childs
         };
     }
@@ -165,9 +162,7 @@ pub const GameObject = struct {
     /// The default kind of game object, it is renderable via its mesh and material.
     pub fn createObject(allocator: *Allocator, mesh: Mesh) GameObject {
         var childs = GameObjectArrayList.init(allocator);
-        var matrix = zlm.Mat4.identity;
         return GameObject {
-            .matrix = matrix,
             .childrens = childs,
             .mesh = mesh
         };
@@ -176,9 +171,7 @@ pub const GameObject = struct {
     /// For cameras, scenes, etc.
     pub fn createCustom(allocator: *Allocator, customType: []const u8, ptr: usize) GameObject {
         var childs = GameObjectArrayList.init(allocator);
-        var matrix = zlm.Mat4.identity;
         return GameObject {
-            .matrix = matrix,
             .childrens = childs,
             .objectType = customType,
             .objectPointer = ptr,
@@ -193,6 +186,13 @@ pub const GameObject = struct {
         for (self.childrens.items) |*child| {
             try child.update(allocator, delta); // TODO: correctly handle errors
         }
+    }
+
+    pub fn findChild(self: *const GameObject, name: []const u8) ?*GameObject {
+        for (self.childrens.items) |*child| {
+            if (std.mem.eql(u8, child.name, name)) return child;
+        }
+        return null;
     }
 
     /// This functions returns the forward (the direction) vector of this game object using its rotation.
@@ -323,10 +323,10 @@ pub const Scene = struct {
     }
 
     pub fn loadFromFile(allocator: *Allocator, path: []const u8) !Scene {
-        const cwd = std.fs.cwd();
         const file = try std.fs.cwd().openFile(path, .{
             .read = true
         });
+        defer file.close();
 
         const text = try reader.readAllAlloc(allocator, std.math.maxInt(u64));
         defer allocator.free(text);
@@ -335,7 +335,7 @@ pub const Scene = struct {
     }
 
     pub fn loadFromMemory(allocator: *Allocator, json: []const u8) !Scene {
-
+        std.debug.warn("{}\n", .{json});
     }
 
     pub fn render(self: *Scene, window: Window) void {
@@ -364,6 +364,10 @@ pub const Scene = struct {
 
     pub fn add(self: *Scene, go: GameObject) !void {
         try self.gameObject.add(go);
+    }
+
+    pub fn findChild(self: *const Scene, name: []const u8) ?*GameObject {
+        return self.gameObject.findChild(name);
     }
 
     pub fn deinit(self: *const Scene) void {

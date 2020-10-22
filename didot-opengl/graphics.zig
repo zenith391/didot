@@ -254,8 +254,8 @@ pub const Texture = struct {
         c.glGenTextures(1, &id);
         c.glBindTexture(c.GL_TEXTURE_2D, id);
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_NEAREST);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_NEAREST);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
         c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB,
             @intCast(c_int, image.width), @intCast(c_int, image.height),
             0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
@@ -338,7 +338,7 @@ pub fn renderScene(scene: *Scene, window: Window) !void {
 
 fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !void {
     if (skybox.meshPath) |meshPath| {
-        var mesh = @intToPtr(*Mesh, (try assets.get(meshPath)).?);
+        var mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
         c.glDepthMask(c.GL_FALSE);
         c.glBindVertexArray(mesh.vao);
         const material = skybox.material;
@@ -363,7 +363,7 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
         }
     }
     if (gameObject.meshPath) |meshPath| {
-        var mesh = @intToPtr(*Mesh, (try assets.get(meshPath)).?);
+        var mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
         c.glBindVertexArray(mesh.vao);
         var material = gameObject.material;
 

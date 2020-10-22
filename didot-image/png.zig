@@ -115,17 +115,17 @@ fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos
 }
 
 fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
-    var val: u9 = if (x > 3) image[pos-3] else 0; // val = a
+    var val: u16 = if (x >= 3) image[pos-3] else 0; // val = a
     if (y > 0) {
         val += image[pos-width]; // val = a + b
     }
-    return sample +% @intCast(u8, @divFloor(val, 2));
+    return sample +% @intCast(u8, val / 2);
 }
 
 fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
-    const a: i32 = if (x > 3) image[pos-3] else 0;
+    const a: i32 = if (x >= 3) image[pos-3] else 0;
     const b: i32 = if (y > 0) image[pos-width] else 0;
-    const c: i32 = if (x > 3 and y > 0) image[pos-width-3] else 0;
+    const c: i32 = if (x >= 3 and y > 0) image[pos-width-3] else 0;
 
     const p: i32 = a + b - c;
     // the minimum value of p is -255, minus the minimum value of a/b/c, the minimum result is -510, so using unreachable is safe

@@ -112,15 +112,17 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
         .texture = texture
     };
     var skybox = try objects.createSkybox(allocator);
+    skybox.meshPath = "Mesh/Cube";
     skybox.material = skyboxMaterial;
     return skybox;
 }
 
 fn initFromFile(allocator: *Allocator, app: *Application) !void {
     input = &app.window.input;
-    app.scene = Scene.loadFromFile(allocator, "res/example-scene.json");
+    var scene = Scene.loadFromFile(allocator, "res/example-scene.json");
     scene.findChild("Camera").?.updateFn = cameraInput;
     scene.findChild("Light").?.updateFn = testLight;
+    app.scene = scene;
 
     //var skybox = try loadSkybox(allocator, camera);
     //try scene.add(skybox);
@@ -129,7 +131,7 @@ fn initFromFile(allocator: *Allocator, app: *Application) !void {
     // while (i < 5) {
     //     var j: f32 = 0;
     //     while (j < 5) {
-    //         var kart2 = GameObject.createObject(allocator, kartMesh);
+    //         var kart2 = GameObject.createObject(allocator, "Mesh/Kart");
     //         kart2.position = Vec3.new(0.7 + (j*8), 0.75, -8 - (i*3));
     //         try scene.add(kart2);
     //         j += 1;

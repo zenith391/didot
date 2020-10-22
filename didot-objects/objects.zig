@@ -20,7 +20,6 @@ pub var PrimitiveCubeMesh: Mesh = undefined;
 /// initPrimitives() must have been called before calling this function!
 pub fn createSkybox(allocator: *Allocator) !GameObject {
     var go = GameObject.createCustom(allocator, "skybox", 0);
-    go.mesh = PrimitiveCubeMesh;
     return go;
 }
 

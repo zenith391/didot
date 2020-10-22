@@ -37,6 +37,10 @@ pub const Asset = struct {
     }
 };
 
+pub const AssetError = error {
+    UnexpectedType
+};
+
 pub const AssetManager = struct {
     assets: std.StringHashMap(Asset),
     allocator: *Allocator,
@@ -57,15 +61,30 @@ pub const AssetManager = struct {
         if (@import("builtin").mode == .Debug or @import("builtin").mode == .ReleaseSafe) {
             if (self.assets.get(key)) |asset| {
                 return asset.objectType == expected;
+            } else {
+                return false;
             }
         } else {
             return true;
         }
     }
 
+    pub fn getExpected(self: *AssetManager, key: []const u8, expected: AssetType) !?usize {
+        if (self.assets.get(key)) |*asset| {
+            const value = try asset.get(self.allocator);
+            try self.assets.put(key, asset.*);
+            if (asset.objectType != expected) {
+                return AssetError.UnexpectedType;
+            }
+            return value;
+        } else {
+            return null;
+        }
+    }
+
     pub fn get(self: *AssetManager, key: []const u8) !?usize {
         if (self.assets.get(key)) |*asset| {
-            var value = try asset.get(self.allocator);
+            const value = try asset.get(self.allocator);
             try self.assets.put(key, asset.*);
             return value;
         } else {

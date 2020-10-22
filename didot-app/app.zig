@@ -87,7 +87,7 @@ pub const Application = struct {
         }
         self.closing = true;
         if (!single_threaded) {
-            thread.wait(); // thread must be closed before scene is de-init (to avoid strange segmentation faults)
+            thread.wait(); // thread must be closed before scene is de-init (to avoid use-after-free)
         }
         self.closing = false;
         self.window.deinit();

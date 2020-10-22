@@ -55,8 +55,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
     camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
     try app.scene.add(camera.gameObject);
-
-    var cube = GameObject.createObject(allocator, objects.PrimitiveCubeMesh);
+    
+    var cube = GameObject.createObject(allocator, "Mesh/Cube");
     cube.position = Vec3.new(-1.2, 0.75, -3);
     try app.scene.add(cube);
 }

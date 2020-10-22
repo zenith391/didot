@@ -29,6 +29,15 @@ pub const Application = struct {
         self.window = window;
         self.allocator = allocator;
         objects.initPrimitives();
+        try scene.assetManager.put("Mesh/Cube", .{
+            .objectPtr = @ptrToInt(&objects.PrimitiveCubeMesh),
+            .objectType = .Mesh
+        });
+        try scene.assetManager.put("Mesh/Plane", .{
+            .objectPtr = @ptrToInt(&objects.PrimitivePlaneMesh),
+            .objectType = .Mesh
+        });
+
         if (self.initFn) |func| {
             try func(allocator, self);
         }
@@ -74,7 +83,7 @@ pub const Application = struct {
                 try self.scene.gameObject.update(allocator, 1);
                 arena.deinit();
             }
-            self.scene.render(self.window);
+            try self.scene.render(self.window);
         }
         self.closing = true;
         if (!single_threaded) {

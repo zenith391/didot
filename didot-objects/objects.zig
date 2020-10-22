@@ -132,7 +132,8 @@ pub fn initPrimitives() void {
 }
 
 pub const GameObject = struct {
-    mesh: ?Mesh = null,
+    //mesh: ?Mesh = null,
+    meshPath: ?[]const u8 = null,
     name: []const u8 = "Game Object",
     /// Functions called regularly depending on the updateTarget value of the Application.
     updateFn: ?fn(allocator: *Allocator, gameObject: *GameObject, delta: f32) anyerror!void = null,
@@ -161,11 +162,11 @@ pub const GameObject = struct {
     }
 
     /// The default kind of game object, it is renderable via its mesh and material.
-    pub fn createObject(allocator: *Allocator, mesh: Mesh) GameObject {
+    pub fn createObject(allocator: *Allocator, meshPath: []const u8) GameObject {
         var childs = GameObjectArrayList.init(allocator);
         return GameObject {
             .childrens = childs,
-            .mesh = mesh
+            .meshPath = meshPath
         };
     }
 
@@ -345,7 +346,7 @@ pub const Scene = struct {
         std.debug.warn("{}\n", .{json});
     }
 
-    pub fn render(self: *Scene, window: Window) void {
+    pub fn render(self: *Scene, window: Window) !void {
         var childs: GameObjectArrayList = self.gameObject.childrens;
 
         // TODO: only do this when a new child is inserted
@@ -366,7 +367,7 @@ pub const Scene = struct {
             }
         }
 
-        graphics.renderScene(self, window);
+        try graphics.renderScene(self, window);
     }
 
     pub fn add(self: *Scene, go: GameObject) !void {
@@ -377,12 +378,14 @@ pub const Scene = struct {
         return self.gameObject.findChild(name);
     }
 
-    pub fn deinit(self: *const Scene) void {
+    pub fn deinit(self: *Scene) void {
         self.gameObject.deinit();
+        self.assetManager.deinit();
     }
 
-    pub fn deinitAll(self: *const Scene) void {
+    pub fn deinitAll(self: *Scene) void {
         self.gameObject.deinitAll();
+        self.assetManager.deinit();
     }
 };
 

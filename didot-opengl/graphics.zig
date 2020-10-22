@@ -279,10 +279,11 @@ const objects = @import("../didot-objects/objects.zig"); // hacky hack til i fou
 const Scene = objects.Scene;
 const GameObject = objects.GameObject;
 const Camera = objects.Camera;
+const AssetManager = objects.AssetManager;
 
 /// Internal method for rendering a game scene.
 /// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)
-pub fn renderScene(scene: *const Scene, window: Window) void {
+pub fn renderScene(scene: *Scene, window: Window) !void {
     const size = window.getFramebufferSize();
     c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
     c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
@@ -290,6 +291,7 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
     c.glEnable(c.GL_FRAMEBUFFER_SRGB);
     //c.glEnable(c.GL_CULL_FACE);
     
+    var assets = &scene.assetManager;
     if (scene.camera) |camera| {
         var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.01, 100);
         camera.shader.setUniformMat4("projMatrix", projMatrix);
@@ -313,7 +315,7 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
                 const view = viewMatrix.toMat3().toMat4();
                 skyboxShader.setUniformMat4("view", view);
                 skyboxShader.setUniformMat4("projection", projMatrix);
-                renderSkybox(skybox, camera);
+                try renderSkybox(skybox, assets, camera);
             }
         }
 
@@ -330,12 +332,13 @@ pub fn renderScene(scene: *const Scene, window: Window) void {
             camera.shader.setUniformBool("useLight", false);
         }
         camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
-        renderObject(scene.gameObject, camera);
+        try renderObject(scene.gameObject, assets, camera);
     }
 }
 
-fn renderSkybox(skybox: *GameObject, camera: *Camera) void {
-    if (skybox.mesh) |mesh| {
+fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !void {
+    if (skybox.meshPath) |meshPath| {
+        var mesh = @intToPtr(*Mesh, (try assets.get(meshPath)).?);
         c.glDepthMask(c.GL_FALSE);
         c.glBindVertexArray(mesh.vao);
         const material = skybox.material;
@@ -353,13 +356,14 @@ fn renderSkybox(skybox: *GameObject, camera: *Camera) void {
     }
 }
 
-fn renderObject(gameObject: GameObject, camera: *Camera) void {
+fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) anyerror!void {
     if (gameObject.objectType) |custom| {
         if (std.mem.eql(u8, custom, "skybox")) {
             return; // don't render skybox here
         }
     }
-    if (gameObject.mesh) |mesh| {
+    if (gameObject.meshPath) |meshPath| {
+        var mesh = @intToPtr(*Mesh, (try assets.get(meshPath)).?);
         c.glBindVertexArray(mesh.vao);
         var material = gameObject.material;
 
@@ -385,7 +389,7 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
 
     var childs = gameObject.childrens;
     for (childs.items) |child| {
-        renderObject(child, camera);
+        try renderObject(child, assets, camera);
     }
 }
 

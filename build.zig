@@ -60,15 +60,15 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         .dependencies = &graphics_deps
     };
     step.linkSystemLibrary("GL");
-
-    const objects = Pkg {
-        .name = "didot-objects",
-        .path = "didot-objects/objects.zig",
-        .dependencies = &[_]Pkg{zlm,graphics}
-    };
+    
     const models = Pkg {
         .name = "didot-models",
         .path = "didot-models/models.zig",
+        .dependencies = &[_]Pkg{zlm,graphics}
+    };
+    const objects = Pkg {
+        .name = "didot-objects",
+        .path = "didot-objects/objects.zig",
         .dependencies = &[_]Pkg{zlm,graphics}
     };
     const app = Pkg {

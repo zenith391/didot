@@ -119,7 +119,7 @@ fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize
     if (y > 0) {
         val += image[pos-width]; // val = a + b
     }
-    return sample +% @intCast(u8, val / 2);
+    return sample +% @intCast(u8, @divFloor(val, 2));
 }
 
 fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
@@ -206,6 +206,7 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
             x = 0;
             // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
             const filterType = try idatReader.readByte();
+            std.debug.warn("line #{} : filter {}\n", .{y, filterType});
             const filter = switch(filterType) {
                 0 => filterNone,
                 1 => filterSub,

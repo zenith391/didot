@@ -200,8 +200,7 @@ pub const ShaderProgram = struct {
                 return ShaderError.InvalidGLContextError;
             }
             var totalSize: usize = @intCast(usize, totalLen);
-            const didot_log = std.log.scoped(.didot);
-            didot_log.err("uncorrect shader:\n {}", .{buf[0..totalSize]});
+            std.log.scoped(.didot).alert("shader compilation errror:\n{}", .{buf[0..totalSize]});
             return ShaderError.ShaderCompileError;
         }
     }
@@ -392,10 +391,8 @@ fn renderObject(gameObject: GameObject, camera: *Camera) void {
 
 usingnamespace @import("didot-window");
 
-test "" {
-    comptime {
-        std.meta.refAllDecls(@This());
-        std.meta.refAllDecls(ShaderProgram);
-        std.meta.refAllDecls(Texture);
-    }
+comptime {
+    std.testing.refAllDecls(@This());
+    std.testing.refAllDecls(ShaderProgram);
+    std.testing.refAllDecls(Texture);
 }

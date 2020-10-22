@@ -49,7 +49,7 @@ pub const Application = struct {
                 if (@errorReturnTrace()) |trace| {
                     std.debug.dumpStackTrace(trace.*);
                 }
-                @panic("error");
+                //@panic("error");
             };
             const wait = @floatToInt(u64, 
                 @floor((1.0/@intToFloat(f64, self.updateTarget))*1000000000.0)
@@ -93,8 +93,6 @@ pub const Application = struct {
 
 };
 
-test "" {
-    comptime {
-        std.meta.refAllDecls(Application);
-    }
+comptime {
+    std.testing.refAllDecls(Application);
 }

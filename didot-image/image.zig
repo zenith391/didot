@@ -28,8 +28,7 @@ pub const Image = struct {
     }
 };
 
-test "" {
-    comptime {
-        @import("std").meta.refAllDecls(bmp);
-    }
+comptime {
+    @import("std").testing.refAllDecls(bmp);
+    @import("std").testing.refAllDecls(png);
 }

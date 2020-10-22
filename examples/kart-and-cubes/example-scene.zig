@@ -85,14 +85,14 @@ fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
 }
 
 fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
-    var skyboxShader = try ShaderProgram.create(@embedFile("skybox-vert.glsl"), @embedFile("skybox-frag.glsl"));
+    var skyboxShader = try ShaderProgram.createFromFile(allocator, "assets/shaders/skybox-vert.glsl", "assets/shaders/skybox-frag.glsl");
     camera.*.skyboxShader = skyboxShader;
-    var top = try bmp.read_bmp(allocator, "res/skybox/top.bmp");
-    var bottom = try bmp.read_bmp(allocator, "res/skybox/bottom.bmp");
-    var right = try bmp.read_bmp(allocator, "res/skybox/right.bmp");
-    var left = try bmp.read_bmp(allocator, "res/skybox/left.bmp");
-    var back = try bmp.read_bmp(allocator, "res/skybox/back.bmp");
-    var front = try bmp.read_bmp(allocator, "res/skybox/front.bmp");
+    var top = try bmp.read_bmp(allocator, "assets/textures/skybox/top.bmp");
+    var bottom = try bmp.read_bmp(allocator, "assets/textures/skybox/bottom.bmp");
+    var right = try bmp.read_bmp(allocator, "assets/textures/skybox/right.bmp");
+    var left = try bmp.read_bmp(allocator, "assets/textures/skybox/left.bmp");
+    var back = try bmp.read_bmp(allocator, "assets/textures/skybox/back.bmp");
+    var front = try bmp.read_bmp(allocator, "assets/textures/skybox/front.bmp");
     var texture = Texture.createCubemap(.{
         .front = front,
         .back = back,
@@ -163,11 +163,11 @@ fn initFromFile(allocator: *Allocator, app: *Application) !void {
 
 fn init(allocator: *Allocator, app: *Application) !void {
     input = &app.window.input;
-    var shader = try ShaderProgram.createFromFile(allocator, "res/shaders/vert.glsl", "res/shaders/frag.glsl");
+    var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
     const scene = app.scene;
 
-    var grassImage = try image.bmp.read_bmp(allocator, "res/grass.bmp");
-    //var grassImage = try image.png.read_png(allocator, "res/grass.png");
+    //var grassImage = try image.bmp.read_bmp(allocator, "assets/textures/grass.bmp");
+    var grassImage = try image.png.read_png(allocator, "assets/textures/grass.png");
     var texture = Texture.create2D(grassImage);
     grassImage.deinit(); // it's now uploaded to the GPU, so we can free the image.
     var grassMaterial = Material {
@@ -195,7 +195,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
     try scene.add(cube2);
 
-    var kartMesh = try obj.read_obj(allocator, "res/kart.obj");
+    var kartMesh = try obj.read_obj(allocator, "assets/kart.obj");
 
     var kart = GameObject.createObject(allocator, kartMesh);
     kart.position = Vec3.new(0.7, 0.75, -5);
@@ -231,7 +231,7 @@ pub fn main() !void {
     }
     const allocator = &gp.allocator;
 
-    var scene = try Scene.create(allocator);
+    var scene = try Scene.create(allocator, null);
 
     var app = Application {
         .title = "Test Cubes",

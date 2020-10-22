@@ -1,6 +1,7 @@
 const graphics = @import("didot-graphics");
 const zlm = @import("zlm");
 const std = @import("std");
+usingnamespace @import("assets.zig");
 
 const Mesh = graphics.Mesh;
 const Window = graphics.Window;
@@ -315,10 +316,16 @@ pub const Scene = struct {
     /// to the "skybox" type.
     skybox: ?*GameObject,
     pointLight: ?*PointLight,
+    assetManager: AssetManager,
 
-    pub fn create(allocator: *Allocator) !*Scene {
+    pub fn create(allocator: *Allocator, assetManager: ?AssetManager) !*Scene {
         var scene = try allocator.create(Scene);
         scene.gameObject = GameObject.createCustom(allocator, "scene", @ptrToInt(scene));
+        if (assetManager) |mg| {
+            scene.assetManager = mg;
+        } else {
+            scene.assetManager = AssetManager.init(allocator);
+        }
         return scene;
     }
 
@@ -384,6 +391,7 @@ pub const ComponentOptions = struct {
     updateFn: ?fn(allocator: *Allocator, component: *Component, gameObject: *GameObject, delta: f32) anyerror!void = null
 };
 
+// TODO: redo components
 pub const Component = struct {
     options: ComponentOptions,
     data: usize,
@@ -435,10 +443,8 @@ test "default camera" {
     cam.deinit();
 }
 
-test "" {
-    comptime {
-        @import("std").meta.refAllDecls(@This());
-        @import("std").meta.refAllDecls(GameObject);
-        @import("std").meta.refAllDecls(Light);
-    }
+comptime {
+    std.testing.refAllDecls(@This());
+    std.testing.refAllDecls(GameObject);
+    std.testing.refAllDecls(PointLight);
 }

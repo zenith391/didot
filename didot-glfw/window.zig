@@ -283,9 +283,7 @@ pub const Window = struct {
 
 };
 
-test "" {
-    comptime {
-        std.meta.refAllDecls(Window);
-        std.meta.refAllDecls(Input);
-    }
+comptime {
+    std.testing.refAllDecls(Window);
+    std.testing.refAllDecls(Input);
 }

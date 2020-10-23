@@ -91,13 +91,13 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject
     try scene.assetManager.put("Texture/Skybox", .{
         .loader = graphics.textureAssetLoader,
         .loaderData = try graphics.TextureAssetLoaderData.initCubemap(allocator, .{
-            .front = "assets/textures/skybox/front.bmp",
-            .back = "assets/textures/skybox/back.bmp",
-            .left = "assets/textures/skybox/left.bmp",
-            .right = "assets/textures/skybox/right.bmp",
-            .top = "assets/textures/skybox/top.bmp",
-            .bottom = "assets/textures/skybox/bottom.bmp"
-        }, "bmp"),
+            .front = "assets/textures/skybox/front.png",
+            .back = "assets/textures/skybox/back.png",
+            .left = "assets/textures/skybox/left.png",
+            .right = "assets/textures/skybox/right.png",
+            .top = "assets/textures/skybox/top.png",
+            .bottom = "assets/textures/skybox/bottom.png"
+        }, "png"),
         .objectType = .Texture
     });
 

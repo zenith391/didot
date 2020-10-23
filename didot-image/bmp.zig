@@ -2,13 +2,13 @@ const std = @import("std");
 const Image = @import("image.zig").Image;
 const Allocator = std.mem.Allocator;
 
-const BMPError = error {
+const BmpError = error {
     InvalidHeader,
     InvalidCompression,
     UnsupportedFormat
 };
 
-pub fn read_bmp(allocator: *Allocator, path: []const u8) !Image {
+pub fn read(allocator: *Allocator, path: []const u8) !Image {
     const cwd = std.fs.cwd();
     const file = try cwd.openFile(path, .{
         .read = true,
@@ -19,7 +19,7 @@ pub fn read_bmp(allocator: *Allocator, path: []const u8) !Image {
     var signature = try reader.readBytesNoEof(2);
 
     if (!std.mem.eql(u8, signature[0..], "BM")) {
-        return error.UnsupportedFormat;
+        return BmpError.UnsupportedFormat;
     }
 
     var size = reader.readIntLittle(u32);
@@ -69,33 +69,42 @@ pub fn read_bmp(allocator: *Allocator, path: []const u8) !Image {
                 try imgReader.skipBytes(skipAhead, .{});
                 i -= 1;
             }
-        } else {
+
+            return Image {
+                .allocator = allocator,
+                .data = data,
+                .width = @intCast(usize, width),
+                .height = @intCast(usize, height),
+                .format = .RGB24
+            };
+        } else if (bytesPerPixel == 3) {
+            var pixel: [3]u8 = undefined; // BGR pixel
             while (i >= 0) {
                 j = 0;
                 while (j < bytesPerLine) {
                     const pos = @intCast(usize, j + i*bytesPerLine);
-                    const b = try imgReader.readByte();
-                    const g = try imgReader.readByte();
-                    const r = try imgReader.readByte();
-                    data[pos] = r;
-                    data[pos+1] = g;
-                    data[pos+2] = b;
+                    _ = try imgReader.readAll(&pixel);
+                    data[pos] = pixel[2];
+                    data[pos+1] = pixel[1];
+                    data[pos+2] = pixel[0];
                     j += 3; // 3 bytes per pixel
                 }
                 const skipAhead: usize = @intCast(usize, @mod(width, 4));
                 try imgReader.skipBytes(skipAhead, .{});
                 i -= 1;
             }
-        }
 
-        return Image {
-            .allocator = allocator,
-            .data = data,
-            .width = @intCast(usize, width),
-            .height = @intCast(usize, height),
-            .format = .RGB24
-        };
+            return Image {
+                .allocator = allocator,
+                .data = data,
+                .width = @intCast(usize, width),
+                .height = @intCast(usize, height),
+                .format = .RGB24
+            };
+        } else {
+            return BmpError.UnsupportedFormat;
+        }
     } else {
-        return BMPError.InvalidHeader;
+        return BmpError.InvalidHeader;
     }
 }

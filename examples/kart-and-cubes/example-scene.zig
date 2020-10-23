@@ -84,32 +84,25 @@ fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     gameObject.position = Vec3.new(std.math.sin(rad)*10+5, 3, std.math.cos(rad)*10-10);
 }
 
-fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
+fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject {
     var skyboxShader = try ShaderProgram.createFromFile(allocator, "assets/shaders/skybox-vert.glsl", "assets/shaders/skybox-frag.glsl");
     camera.*.skyboxShader = skyboxShader;
-    var top = try bmp.read_bmp(allocator, "assets/textures/skybox/top.bmp");
-    var bottom = try bmp.read_bmp(allocator, "assets/textures/skybox/bottom.bmp");
-    var right = try bmp.read_bmp(allocator, "assets/textures/skybox/right.bmp");
-    var left = try bmp.read_bmp(allocator, "assets/textures/skybox/left.bmp");
-    var back = try bmp.read_bmp(allocator, "assets/textures/skybox/back.bmp");
-    var front = try bmp.read_bmp(allocator, "assets/textures/skybox/front.bmp");
-    var texture = Texture.createCubemap(.{
-        .front = front,
-        .back = back,
-        .left = left,
-        .right = right,
-        .top = top,
-        .bottom = bottom
+
+    try scene.assetManager.put("Texture/Skybox", .{
+        .loader = graphics.textureAssetLoader,
+        .loaderData = try graphics.TextureAssetLoaderData.initCubemap(allocator, .{
+            .front = "assets/textures/skybox/front.bmp",
+            .back = "assets/textures/skybox/back.bmp",
+            .left = "assets/textures/skybox/left.bmp",
+            .right = "assets/textures/skybox/right.bmp",
+            .top = "assets/textures/skybox/top.bmp",
+            .bottom = "assets/textures/skybox/bottom.bmp"
+        }, "bmp"),
+        .objectType = .Texture
     });
-    front.deinit();
-    back.deinit();
-    left.deinit();
-    right.deinit();
-    top.deinit();
-    bottom.deinit();
 
     var skyboxMaterial = Material {
-        .texture = texture
+        .texturePath = "Texture/Skybox"
     };
     var skybox = try objects.createSkybox(allocator);
     skybox.meshPath = "Mesh/Cube";
@@ -145,12 +138,13 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
     const scene = app.scene;
 
-    //var grassImage = try image.bmp.read_bmp(allocator, "assets/textures/grass.bmp");
-    var grassImage = try image.png.read_png(allocator, "assets/textures/grass.png");
-    var texture = Texture.create2D(grassImage);
-    grassImage.deinit(); // it's now uploaded to the GPU, so we can free the image.
+    try scene.assetManager.put("Texture/Grass", .{
+        .loader = graphics.textureAssetLoader,
+        .loaderData = try graphics.TextureAssetLoaderData.init2D(allocator, "assets/textures/grass.png", "png"),
+        .objectType = .Texture
+    });
     var grassMaterial = Material {
-        .texture = texture
+        .texturePath = "Texture/Grass"
     };
 
     var camera = try Camera.create(allocator, shader);
@@ -159,8 +153,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     camera.gameObject.updateFn = cameraInput;
     try scene.add(camera.gameObject);
 
-    //var skybox = try loadSkybox(allocator, camera);
-    //try scene.add(skybox);
+    var skybox = try loadSkybox(allocator, camera, scene);
+    try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, "Mesh/Cube");
     cube.position = Vec3.new(10, -0.75, -10);
@@ -212,9 +206,7 @@ pub fn main() !void {
         _ = gp.deinit();
     }
     const allocator = &gp.allocator;
-
     var scene = try Scene.create(allocator, null);
-
     var app = Application {
         .title = "Test Cubes",
         .initFn = init

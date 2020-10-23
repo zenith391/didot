@@ -23,7 +23,6 @@ pub const MeshAssetLoaderError = error {
 
 pub fn meshAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
     const data = @intToPtr(*MeshAssetLoaderData, dataPtr);
-    defer allocator.destroy(data);
     if (std.mem.eql(u8, data.format, "obj")) {
         const mesh = try obj.read_obj(allocator, data.path);
         var m = try allocator.create(graphics.Mesh);

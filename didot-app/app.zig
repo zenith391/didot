@@ -29,12 +29,15 @@ pub const Application = struct {
         self.window = window;
         self.allocator = allocator;
         objects.initPrimitives();
+        
         try scene.assetManager.put("Mesh/Cube", .{
             .objectPtr = @ptrToInt(&objects.PrimitiveCubeMesh),
+            .unloadable = false,
             .objectType = .Mesh
         });
         try scene.assetManager.put("Mesh/Plane", .{
             .objectPtr = @ptrToInt(&objects.PrimitivePlaneMesh),
+            .unloadable = false,
             .objectType = .Mesh
         });
 

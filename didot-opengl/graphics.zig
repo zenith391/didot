@@ -1,6 +1,7 @@
 const c = @import("c.zig");
 const std = @import("std");
 const zlm = @import("zlm");
+const Thread = std.Thread;
 const Allocator = std.mem.Allocator;
 
 pub const ShaderError = error {
@@ -72,7 +73,7 @@ pub const Mesh = struct {
 pub const Color = zlm.Vec3;
 
 pub const Material = struct {
-    texture: ?Texture = null,
+    texturePath: ?[]const u8 = null,
     ambient: Color = Color.zero,
     diffuse: Color = Color.one,
     specular: Color = Color.one,
@@ -206,60 +207,40 @@ pub const ShaderProgram = struct {
     }
 };
 
-const Image = @import("didot-image").Image;
+const image = @import("didot-image");
+const Image = image.Image;
 
 pub const CubemapSettings = struct {
-    right: Image,
-    left: Image,
-    top: Image,
-    bottom: Image,
-    front: Image,
-    back: Image
+    right: []const u8,
+    left: []const u8,
+    top: []const u8,
+    bottom: []const u8,
+    front: []const u8,
+    back: []const u8
 };
 
 pub const Texture = struct {
     id: c.GLuint,
 
-    pub fn createCubemap(cb: CubemapSettings) Texture {
+    pub fn createEmptyCubemap() Texture {
         var id: c.GLuint = undefined;
         c.glGenTextures(1, &id);
         c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, id);
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
         c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
         c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        const targets = [_]c.GLint {
-            c.GL_TEXTURE_CUBE_MAP_POSITIVE_X,
-            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
-            c.GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
-            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
-            c.GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
-            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
-        };
-        comptime var i = 0;
-        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
-            const image = @field(cb, field.name);
-            c.glTexImage2D(targets[i], 0, c.GL_SRGB,
-                @intCast(c_int, image.width), @intCast(c_int, image.height),
-                0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
-            i += 1;
-        }
-        c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, 0);
         return Texture {
             .id = id
         };
     }
 
-    pub fn create2D(image: Image) Texture {
+    pub fn createEmpty2D() Texture {
         var id: c.GLuint = undefined;
         c.glGenTextures(1, &id);
         c.glBindTexture(c.GL_TEXTURE_2D, id);
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB,
-            @intCast(c_int, image.width), @intCast(c_int, image.height),
-            0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &image.data[0]);
-        c.glBindTexture(c.GL_TEXTURE_2D, 0);
         return Texture {
             .id = id
         };
@@ -274,6 +255,117 @@ pub const Texture = struct {
     }
 
 };
+
+// Image asset loader
+pub const TextureAssetLoaderData = struct {
+    path: ?[]const u8,
+    cubemap: ?CubemapSettings,
+    format: []const u8,
+
+    /// Memory is caller owned
+    pub fn init2D(allocator: *Allocator, path: []const u8, format: []const u8) !usize {
+        var data = try allocator.create(TextureAssetLoaderData);
+        data.path = path;
+        data.cubemap = null;
+        data.format = format;
+        return @ptrToInt(data);
+    }
+
+    /// Memory is caller owned
+    pub fn initCubemap(allocator: *Allocator, cb: CubemapSettings, format: []const u8) !usize {
+        var data = try allocator.create(TextureAssetLoaderData);
+        data.path = null;
+        data.cubemap = cb;
+        data.format = format;
+        return @ptrToInt(data);
+    }
+};
+
+pub const TextureAssetLoaderError = error {
+    InvalidFormat
+};
+
+fn textureLoadImage(allocator: *Allocator, path: []const u8, format: []const u8) !Image {
+    if (std.mem.eql(u8, format, "png")) {
+        return try image.png.read(allocator, path);
+    } else if (std.mem.eql(u8, format, "bmp")) {
+        return try image.bmp.read(allocator, path);
+    } else {
+        return TextureAssetLoaderError.InvalidFormat;
+    }
+}
+
+// struct used to pass data between main thread and worker threads
+const CubemapThreadStruct = struct {
+    allocator: *Allocator,
+    path: []const u8,
+    format: []const u8,
+    image: Image
+};
+
+fn cubemapThread(data: *CubemapThreadStruct) !void {
+    data.image = try textureLoadImage(data.allocator, data.path, data.format);
+}
+
+pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
+    var data = @intToPtr(*TextureAssetLoaderData, dataPtr);
+    if (data.cubemap) |cb| {
+        var texture = Texture.createEmptyCubemap();
+
+        var structs: [6]CubemapThreadStruct = undefined;
+        var threads: [6]*Thread = undefined;
+        comptime var i = 0;
+
+        // start loading the textures
+        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
+            const path = @field(cb, field.name);
+            structs[i] = .{
+                .allocator = allocator,
+                .path = path,
+                .format = data.format,
+                .image = undefined
+            };
+            threads[i] = try Thread.spawn(&structs[i], cubemapThread);
+            i += 1;
+        }
+        i = 0;
+
+        // retrieve them
+        const targets = [_]c.GLint {
+            c.GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
+            c.GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
+            c.GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+        };
+        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
+            threads[i].wait();
+            const img = structs[i].image;
+            c.glTexImage2D(targets[i], 0, c.GL_SRGB,
+                @intCast(c_int, img.width), @intCast(c_int, img.height),
+                0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+            img.deinit();
+            i += 1;
+        }
+        var t = try allocator.create(Texture);
+        t.* = texture;
+        return @ptrToInt(t);
+    } else if (data.path) |path| {
+        var texture = Texture.createEmpty2D();
+
+        var img = try textureLoadImage(allocator, path, data.format);
+        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB,
+            @intCast(c_int, img.width), @intCast(c_int, img.height),
+            0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+        img.deinit();
+        var t = try allocator.create(Texture);
+        t.* = texture;
+        return @ptrToInt(t);
+    } else {
+        return TextureAssetLoaderError.InvalidFormat;
+    }
+}
 
 const objects = @import("../didot-objects/objects.zig"); // hacky hack til i found a way for graphics to depend on objects
 const Scene = objects.Scene;
@@ -341,9 +433,10 @@ fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !vo
         var mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
         c.glDepthMask(c.GL_FALSE);
         c.glBindVertexArray(mesh.vao);
-        const material = skybox.material;
+        const material = &skybox.material;
 
-        if (material.texture) |texture| {
+        if (material.texturePath) |path| {
+            const texture = @intToPtr(*Texture, (try assets.getExpected(path, .Texture)).?);
             c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
         }
 
@@ -365,9 +458,10 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
     if (gameObject.meshPath) |meshPath| {
         var mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
         c.glBindVertexArray(mesh.vao);
-        var material = gameObject.material;
+        var material = &gameObject.material;
 
-        if (material.texture) |texture| {
+        if (material.texturePath) |path| {
+            const texture = @intToPtr(*Texture, (try assets.getExpected(path, .Texture)).?);
             texture.bind();
             camera.shader.setUniformBool("useTex", true);
         } else {

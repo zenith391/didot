@@ -4,7 +4,6 @@ const Allocator = std.mem.Allocator;
 
 pub const PngError = error {
     InvalidHeader,
-    InvalidCompression,
     InvalidFilter,
     UnsupportedFormat
 };
@@ -71,29 +70,6 @@ const IHDR = struct {
     interlaceMethod: u8
 };
 
-fn readChunk(allocator: *Allocator, reader: anytype) !Chunk {
-    const length = try reader.readIntBig(u32);
-    var chunkType = try allocator.alloc(u8, 4);
-    _ = try reader.readAll(chunkType);
-    var data = try allocator.alloc(u8, length);
-    _ = try reader.readAll(data);
-
-    const crc = try reader.readIntBig(u32);
-    var stream = ChunkStream {
-        .buffer = data,
-        .pos = 0
-    };
-
-    return Chunk {
-        .length = length,
-        .type = chunkType,
-        .data = data,
-        .stream = stream,
-        .crc = crc,
-        .allocator = allocator
-    };
-}
-
 fn filterNone(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
     return sample;
 }
@@ -142,7 +118,30 @@ fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, 
     }
 }
 
-pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
+fn readChunk(allocator: *Allocator, reader: anytype) !Chunk {
+    const length = try reader.readIntBig(u32);
+    var chunkType = try allocator.alloc(u8, 4);
+    _ = try reader.readAll(chunkType);
+    var data = try allocator.alloc(u8, length);
+    _ = try reader.readAll(data);
+
+    const crc = try reader.readIntBig(u32);
+    var stream = ChunkStream {
+        .buffer = data,
+        .pos = 0
+    };
+
+    return Chunk {
+        .length = length,
+        .type = chunkType,
+        .data = data,
+        .stream = stream,
+        .crc = crc,
+        .allocator = allocator
+    };
+}
+
+pub fn read(allocator: *Allocator, path: []const u8) !Image {
     const file = try std.fs.cwd().openFile(path, .{ .read = true });
     const unbufferedReader = file.reader();
     var bufferedReader = std.io.BufferedReader(16*1024, @TypeOf(unbufferedReader)) { 
@@ -206,7 +205,6 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
             x = 0;
             // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
             const filterType = try idatReader.readByte();
-            std.debug.warn("line #{} : filter {}\n", .{y, filterType});
             const filter = switch(filterType) {
                 0 => filterNone,
                 1 => filterSub,
@@ -228,13 +226,15 @@ pub fn read_png(allocator: *Allocator, path: []const u8) !Image {
             }
             y += 1;
         }
-    }
 
-    return Image {
-        .allocator = allocator,
-        .data = imageData,
-        .width = ihdr.width,
-        .height = ihdr.height,
-        .format = .RGB24
-    };
+        return Image {
+            .allocator = allocator,
+            .data = imageData,
+            .width = ihdr.width,
+            .height = ihdr.height,
+            .format = .RGB24
+        };
+    } else {
+        return PngError.UnsupportedFormat;
+    }
 }

@@ -1,6 +1,7 @@
 pub const bmp = @import("bmp.zig");
 pub const png = @import("png.zig");
-const Allocator = @import("std").mem.Allocator;
+const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 pub const ImageFormat = enum {
     /// 8-bit red, green and blue samples in that order.
@@ -21,7 +22,7 @@ pub const Image = struct {
     height: usize,
     format: ImageFormat,
 
-    pub fn deinit(self: *Image) void {
+    pub fn deinit(self: *const Image) void {
         if (self.allocator) |allocator| {
             allocator.free(self.data);
         }

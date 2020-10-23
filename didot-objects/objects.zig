@@ -76,6 +76,7 @@ pub fn initPrimitives() void {
     //     0, 1, 10,
     //     1, 11, 10,
     // };
+    //PrimitiveCubeMesh = Mesh.create(cubeVert[0..], cubeElem[0..]);
 
     var cubeVert = [_]f32{
         // back
@@ -126,7 +127,6 @@ pub fn initPrimitives() void {
         -0.5,  0.5,  0.5,  0.0,  1.0,  0.0, 0.0, 1.0,
         -0.5,  0.5, -0.5,  0.0,  1.0,  0.0, 0.0, 0.0,
     };
-    //PrimitiveCubeMesh = Mesh.create(cubeVert[0..], cubeElem[0..]);
     PrimitiveCubeMesh = Mesh.create(cubeVert[0..], null);
 }
 
@@ -330,12 +330,10 @@ pub const Scene = struct {
     }
 
     pub fn loadFromFile(allocator: *Allocator, path: []const u8) !Scene {
-        const file = try std.fs.cwd().openFile(path, .{
-            .read = true
-        });
+        const file = try std.fs.cwd().openFile(path, .{ .read = true });
         defer file.close();
 
-        const text = try reader.readAllAlloc(allocator, std.math.maxInt(u64));
+        const text = try reader.readAllAlloc(allocator, std.math.maxInt(usize));
         defer allocator.free(text);
 
         return Scene.loadFromMemory(allocator, text);

@@ -34,16 +34,13 @@ Cube:
 ```zig
 const std = @import("std");
 const zlm = @import("zlm");
-const Vec3 = zlm.Vec3;
-const Allocator = std.mem.Allocator;
-
 const graphics = @import("didot-graphics");
 const objects = @import("didot-objects");
 const Application = @import("didot-app").Application;
 
-const Window = graphics.Window;
+const Vec3 = zlm.Vec3;
+const Allocator = std.mem.Allocator;
 const ShaderProgram = graphics.ShaderProgram;
-
 const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
@@ -79,11 +76,12 @@ It's done this way because making a universal shader language is hard and would 
 
 And to make that into a textured cube, only a few lines are necessary:
 ```zig
-var img = try bmp.read_bmp(allocator, "grass.bmp");
-var tex = Texture.create(img);
-var material = Material {
-    .texture = tex
-};
+try scene.assetManager.put("Texture/Grass", .{
+    .loader = graphics.textureAssetLoader,
+    .loaderData = try graphics.TextureAssetLoaderData.init2D(allocator, "assets/textures/grass.png", "png"),
+    .objectType = .Texture
+});
+var material = Material { .texturePath = "Texture/Grass" };
 cube.material = material;
 ```
 

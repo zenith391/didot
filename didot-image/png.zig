@@ -192,7 +192,10 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
     };
     var zlibStream = try std.compress.zlib.zlibStream(allocator, idatStream.reader());
     defer zlibStream.deinit();
-    const idatReader = zlibStream.reader();
+    var zlibReader = zlibStream.reader();
+    const idatReader = (std.io.BufferedReader(16*1024, @TypeOf(zlibReader)) { 
+        .unbuffered_reader = zlibReader
+    }).reader();
 
     // allocate image data (TODO: support more than RGB)
     const imageData = try allocator.alloc(u8, ihdr.width*ihdr.height*3);
@@ -200,12 +203,13 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
     if (ihdr.colorType == .Truecolor) {
         var x: u32 = 0;
         var y: u32 = 0;
+        var pixel: [3]u8 = undefined;
         const bytesPerLine = ihdr.width * 3;
         while (y < ihdr.height) {
             x = 0;
             // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
             const filterType = try idatReader.readByte();
-            const filter = switch(filterType) {
+            const filter = switch (filterType) {
                 0 => filterNone,
                 1 => filterSub,
                 2 => filterUp,
@@ -215,12 +219,10 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
             };
             while (x < bytesPerLine) {
                 const pos = y*bytesPerLine + x;
-                const r = try idatReader.readByte();
-                const g = try idatReader.readByte();
-                const b = try idatReader.readByte();
-                imageData[pos] = filter(imageData, r, x, y, bytesPerLine, pos);
-                imageData[pos+1] = filter(imageData, g, x+1, y, bytesPerLine, pos+1);
-                imageData[pos+2] = filter(imageData, b, x+2, y, bytesPerLine, pos+2);
+                _ = try idatReader.readAll(&pixel);
+                imageData[pos] = filter(imageData, pixel[0], x, y, bytesPerLine, pos);
+                imageData[pos+1] = filter(imageData, pixel[1], x+1, y, bytesPerLine, pos+1);
+                imageData[pos+2] = filter(imageData, pixel[2], x+2, y, bytesPerLine, pos+2);
                 x += 3; // since we use 3 bytes per pixel, let's directly increment X by 3
                 // (that optimisation is also useful in the filter method)
             }

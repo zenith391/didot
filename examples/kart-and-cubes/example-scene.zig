@@ -44,6 +44,8 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
 
     if (input.isMouseButtonDown(.Left)) {
         input.setMouseInputMode(.Grabbed);
+    } else if (input.isMouseButtonDown(.Right)) {
+        input.setMouseInputMode(.Normal);
     } else if (input.isKeyDown(Input.KEY_ESCAPE)) {
         input.setMouseInputMode(.Normal);
     }
@@ -65,7 +67,7 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
         if (fw < threshold and fw > 0) fw = 0;
         if (fw > -threshold and fw < 0) fw = 0;
 
-        gameObject.position = gameObject.position.add(forward.scale(thrust*speed));
+        gameObject.position = gameObject.position.add(forward.scale(thrust * speed));
         gameObject.rotation.x -= (r / 50.0) * delta;
         gameObject.rotation.y -= (fw / 50.0) * delta;
 
@@ -80,8 +82,8 @@ fn cameraInput(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void
 
 fn testLight(allocator: *Allocator, gameObject: *GameObject, delta: f32) !void {
     const time = @intToFloat(f64, std.time.milliTimestamp());
-    const rad = @floatCast(f32, @mod((time/1000.0), std.math.pi*2.0));
-    gameObject.position = Vec3.new(std.math.sin(rad)*10+5, 3, std.math.cos(rad)*10-10);
+    const rad = @floatCast(f32, @mod((time / 1000.0), std.math.pi * 2.0));
+    gameObject.position = Vec3.new(std.math.sin(rad) * 20 + 10, 3, std.math.cos(rad) * 10 - 10);
 }
 
 fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject {
@@ -91,19 +93,17 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject
     try scene.assetManager.put("Texture/Skybox", .{
         .loader = graphics.textureAssetLoader,
         .loaderData = try graphics.TextureAssetLoaderData.initCubemap(allocator, .{
-            .front = "assets/textures/skybox/front.bmp",
-            .back = "assets/textures/skybox/back.bmp",
-            .left = "assets/textures/skybox/left.bmp",
-            .right = "assets/textures/skybox/right.bmp",
-            .top = "assets/textures/skybox/top.bmp",
-            .bottom = "assets/textures/skybox/bottom.bmp"
-        }, "bmp"),
-        .objectType = .Texture
+            .front = "assets/textures/skybox/front.png",
+            .back = "assets/textures/skybox/back.png",
+            .left = "assets/textures/skybox/left.png",
+            .right = "assets/textures/skybox/right.png",
+            .top = "assets/textures/skybox/top.png",
+            .bottom = "assets/textures/skybox/bottom.png",
+        }, "png"),
+        .objectType = .Texture,
     });
 
-    var skyboxMaterial = Material {
-        .texturePath = "Texture/Skybox"
-    };
+    var skyboxMaterial = Material{ .texturePath = "Texture/Skybox" };
     var skybox = try objects.createSkybox(allocator);
     skybox.meshPath = "Mesh/Cube";
     skybox.material = skyboxMaterial;
@@ -141,11 +141,9 @@ fn init(allocator: *Allocator, app: *Application) !void {
     try scene.assetManager.put("Texture/Grass", .{
         .loader = graphics.textureAssetLoader,
         .loaderData = try graphics.TextureAssetLoaderData.init2D(allocator, "assets/textures/grass.png", "png"),
-        .objectType = .Texture
+        .objectType = .Texture,
     });
-    var grassMaterial = Material {
-        .texturePath = "Texture/Grass"
-    };
+    var grassMaterial = Material{ .texturePath = "Texture/Grass" };
 
     var camera = try Camera.create(allocator, shader);
     camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
@@ -171,7 +169,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     try scene.assetManager.put("Mesh/Kart", .{
         .loader = models.meshAssetLoader,
         .loaderData = try models.MeshAssetLoaderData.init(allocator, "assets/kart.obj", "obj"),
-        .objectType = .Mesh
+        .objectType = .Mesh,
     });
     var kart = GameObject.createObject(allocator, "Mesh/Kart");
     kart.position = Vec3.new(0.7, 0.75, -5);
@@ -179,11 +177,20 @@ fn init(allocator: *Allocator, app: *Application) !void {
     try scene.add(kart);
 
     var i: f32 = 0;
-    while (i < 5) {
+    while (i < 7) { // rows front to back
         var j: f32 = 0;
-        while (j < 5) {
+        while (j < 5) { // cols left to right
             var kart2 = GameObject.createObject(allocator, "Mesh/Kart");
-            kart2.position = Vec3.new(0.7 + (j*8), 0.75, -8 - (i*3));
+            kart2.position = Vec3.new(0.7 + (j * 8), 0.75, -8 - (i * 3));
+
+            // lets decorate the kart based on its location
+            kart2.material.ambient = Vec3.new(0.0, j * 0.001, 0.002);
+            kart2.material.diffuse = Vec3.new(i * 0.1, j * 0.1, 0.6);
+
+            // dull on the left, getting shinier to the right
+            kart2.material.specular = Vec3.new(1.0 - (j * 0.2), 1.0 - (j * 0.2), 0.2);
+            kart2.material.shininess = 110.0 - (j * 20.0);
+
             try scene.add(kart2);
             j += 1;
         }
@@ -207,9 +214,9 @@ pub fn main() !void {
     }
     const allocator = &gp.allocator;
     var scene = try Scene.create(allocator, null);
-    var app = Application {
+    var app = Application{
         .title = "Test Cubes",
-        .initFn = init
+        .initFn = init,
     };
     try app.start(allocator, scene);
 }

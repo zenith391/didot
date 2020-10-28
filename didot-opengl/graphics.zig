@@ -13,12 +13,6 @@ pub const ShaderError = error {
 pub const MeshElementType = c.GLuint;
 
 pub const Mesh = struct {
-    /// Meshes can be lazily loaded and path is used when a mesh must be loaded
-    path: ?[]const u8 = null,
-    
-    /// Whether the model has been loaded or not.
-    loaded: bool = true,
-
     // OpenGL related variables
     hasVao: bool = false,
     hasEbo: bool = true,
@@ -171,8 +165,7 @@ pub const ShaderProgram = struct {
     /// Set an OpenGL uniform to the following boolean.
     pub fn setUniformBool(self: *ShaderProgram, name: [:0]const u8, val: bool) void {
         var uniform = c.glGetUniformLocation(self.id, name);
-        var v: c.GLint = 0;
-        if (val) v = 1;
+        var v: c.GLint = if (val) 1 else 0;
         c.glUniform1i(uniform, v);
     }
 
@@ -311,27 +304,7 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
     var data = @intToPtr(*TextureAssetLoaderData, dataPtr);
     if (data.cubemap) |cb| {
         var texture = Texture.createEmptyCubemap();
-
-        var structs: [6]CubemapThreadStruct = undefined;
-        var threads: [6]*Thread = undefined;
-        comptime var i = 0;
-
-        // start loading the textures
-        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
-            const path = @field(cb, field.name);
-            structs[i] = .{
-                .allocator = allocator,
-                .path = path,
-                .format = data.format,
-                .image = undefined
-            };
-            threads[i] = try Thread.spawn(&structs[i], cubemapThread);
-            i += 1;
-        }
-        i = 0;
-
-        // retrieve them
-        const targets = [_]c.GLint {
+        const targets = [_]c.GLuint {
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_X,
             c.GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
@@ -339,14 +312,47 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
             c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
         };
-        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
-            threads[i].wait();
-            const img = structs[i].image;
-            c.glTexImage2D(targets[i], 0, c.GL_SRGB,
-                @intCast(c_int, img.width), @intCast(c_int, img.height),
-                0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
-            img.deinit();
-            i += 1;
+
+        if (@import("builtin").single_threaded) {
+            comptime var i = 0;
+
+            inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
+                const path = @field(cb, field.name);
+                const img = try textureLoadImage(allocator, path, data.format);
+                c.glTexImage2D(targets[i], 0, c.GL_SRGB,
+                    @intCast(c_int, img.width), @intCast(c_int, img.height),
+                    0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+                img.deinit();
+                i += 1;
+            }
+        } else {
+            var structs: [6]CubemapThreadStruct = undefined;
+            var threads: [6]*Thread = undefined;
+            comptime var i = 0;
+
+            // start loading the textures
+            inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
+                const path = @field(cb, field.name);
+                structs[i] = .{
+                    .allocator = allocator,
+                    .path = path,
+                    .format = data.format,
+                    .image = undefined
+                };
+                threads[i] = try Thread.spawn(&structs[i], cubemapThread);
+                i += 1;
+            }
+
+            // retrieve them
+            var j: usize = 0;
+            while (j < 6) : (j += 1) {
+                threads[j].wait();
+                const img = structs[j].image;
+                c.glTexImage2D(targets[j], 0, c.GL_SRGB,
+                    @intCast(c_int, img.width), @intCast(c_int, img.height),
+                    0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+                img.deinit();
+            }
         }
         var t = try allocator.create(Texture);
         t.* = texture;
@@ -481,8 +487,8 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
         }
     }
 
-    var childs = gameObject.childrens;
-    for (childs.items) |child| {
+    var childs = gameObject.childrens.items;
+    for (childs) |child| {
         try renderObject(child, assets, camera);
     }
 }

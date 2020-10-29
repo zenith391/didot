@@ -4,10 +4,7 @@ const zlm = @import("zlm");
 const Thread = std.Thread;
 const Allocator = std.mem.Allocator;
 
-pub const ShaderError = error {
-    ShaderCompileError,
-    InvalidGLContextError
-};
+pub const ShaderError = error{ ShaderCompileError, InvalidGLContextError };
 
 /// The type used for meshes's elements
 pub const MeshElementType = c.GLuint;
@@ -28,16 +25,16 @@ pub const Mesh = struct {
         var vbo: c.GLuint = 0;
         c.glGenBuffers(1, &vbo);
         c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
-        c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(c_long, vertices.len*@sizeOf(f32)), vertices.ptr, c.GL_STATIC_DRAW);
-        
+        c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(c_long, vertices.len * @sizeOf(f32)), vertices.ptr, c.GL_STATIC_DRAW);
+
         const stride = 8 * @sizeOf(f32);
 
         var vao: c.GLuint = 0;
         c.glGenVertexArrays(1, &vao);
         c.glBindVertexArray(vao);
         c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, 0);
-        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
-        c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, 6*@sizeOf(f32));
+        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, stride, 3 * @sizeOf(f32));
+        c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, 6 * @sizeOf(f32));
         c.glEnableVertexAttribArray(0);
         c.glEnableVertexAttribArray(1);
         c.glEnableVertexAttribArray(2);
@@ -47,17 +44,17 @@ pub const Mesh = struct {
         if (elements) |elem| {
             c.glGenBuffers(1, &ebo);
             c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, ebo);
-            c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, elem.len*@sizeOf(c.GLuint)), elem.ptr, c.GL_STATIC_DRAW);
+            c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, elem.len * @sizeOf(c.GLuint)), elem.ptr, c.GL_STATIC_DRAW);
             elementsSize = elem.len;
         }
 
-        return Mesh {
+        return Mesh{
             .vao = vao,
             .vbo = vbo,
             .ebo = ebo,
             .elements = elementsSize,
             .vertices = vertices.len,
-            .hasEbo = elements != null
+            .hasEbo = elements != null,
         };
     }
 };
@@ -71,8 +68,9 @@ pub const Material = struct {
     ambient: Color = Color.zero,
     diffuse: Color = Color.one,
     specular: Color = Color.one,
+    shininess: f32 = 32.0,
 
-    pub const default = Material {};
+    pub const default = Material{};
 };
 
 pub const ShaderProgram = struct {
@@ -82,18 +80,14 @@ pub const ShaderProgram = struct {
     fragment: c.GLuint,
 
     pub fn createFromFile(allocator: *Allocator, vertPath: []const u8, fragPath: []const u8) !ShaderProgram {
-        const vertFile = try std.fs.cwd().openFile(vertPath, .{
-            .read = true
-        });
+        const vertFile = try std.fs.cwd().openFile(vertPath, .{ .read = true });
         const vert = try vertFile.reader().readAllAlloc(allocator, std.math.maxInt(u64));
         const nullVert = try allocator.dupeZ(u8, vert); // null-terminated string
         allocator.free(vert);
         defer allocator.free(nullVert);
         vertFile.close();
 
-        const fragFile = try std.fs.cwd().openFile(fragPath, .{
-            .read = true
-        });
+        const fragFile = try std.fs.cwd().openFile(fragPath, .{ .read = true });
         const frag = try fragFile.reader().readAllAlloc(allocator, std.math.maxInt(u64));
         const nullFrag = try allocator.dupeZ(u8, frag);
         allocator.free(frag);
@@ -133,14 +127,14 @@ pub const ShaderProgram = struct {
         c.glEnableVertexAttribArray(@bitCast(c.GLuint, posAttrib));
 
         const texAttrib = c.glGetAttribLocation(shaderProgramId, "texcoord");
-        c.glVertexAttribPointer(@bitCast(c.GLuint, texAttrib), 2, c.GL_FLOAT, c.GL_FALSE, stride, 3*@sizeOf(f32));
+        c.glVertexAttribPointer(@bitCast(c.GLuint, texAttrib), 2, c.GL_FLOAT, c.GL_FALSE, stride, 3 * @sizeOf(f32));
         c.glEnableVertexAttribArray(@bitCast(c.GLuint, texAttrib));
 
-        return ShaderProgram {
+        return ShaderProgram{
             .id = shaderProgramId,
             .vao = vao,
             .vertex = vertexShader,
-            .fragment = fragmentShader
+            .fragment = fragmentShader,
         };
     }
 
@@ -157,7 +151,7 @@ pub const ShaderProgram = struct {
             m[0][0], m[0][1], m[0][2], m[0][3],
             m[1][0], m[1][1], m[1][2], m[1][3],
             m[2][0], m[2][1], m[2][2], m[2][3],
-            m[3][0], m[3][1], m[3][2], m[3][3]
+            m[3][0], m[3][1], m[3][2], m[3][3],
         };
         c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, &columns[0]);
     }
@@ -204,12 +198,7 @@ const image = @import("didot-image");
 const Image = image.Image;
 
 pub const CubemapSettings = struct {
-    right: []const u8,
-    left: []const u8,
-    top: []const u8,
-    bottom: []const u8,
-    front: []const u8,
-    back: []const u8
+    right: []const u8, left: []const u8, top: []const u8, bottom: []const u8, front: []const u8, back: []const u8
 };
 
 pub const Texture = struct {
@@ -222,9 +211,7 @@ pub const Texture = struct {
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
         c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
         c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        return Texture {
-            .id = id
-        };
+        return Texture{ .id = id };
     }
 
     pub fn createEmpty2D() Texture {
@@ -234,9 +221,7 @@ pub const Texture = struct {
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        return Texture {
-            .id = id
-        };
+        return Texture{ .id = id };
     }
 
     pub inline fn bind(self: *const Texture) void {
@@ -246,7 +231,6 @@ pub const Texture = struct {
     pub fn deinit(self: *const Texture) void {
         c.glDeleteTextures(1, &self.id);
     }
-
 };
 
 // Image asset loader
@@ -274,9 +258,7 @@ pub const TextureAssetLoaderData = struct {
     }
 };
 
-pub const TextureAssetLoaderError = error {
-    InvalidFormat
-};
+pub const TextureAssetLoaderError = error{InvalidFormat};
 
 fn textureLoadImage(allocator: *Allocator, path: []const u8, format: []const u8) !Image {
     if (std.mem.eql(u8, format, "png")) {
@@ -290,10 +272,7 @@ fn textureLoadImage(allocator: *Allocator, path: []const u8, format: []const u8)
 
 // struct used to pass data between main thread and worker threads
 const CubemapThreadStruct = struct {
-    allocator: *Allocator,
-    path: []const u8,
-    format: []const u8,
-    image: Image
+    allocator: *Allocator, path: []const u8, format: []const u8, image: Image
 };
 
 fn cubemapThread(data: *CubemapThreadStruct) !void {
@@ -310,7 +289,7 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
             c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
-            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
         };
 
         if (@import("builtin").single_threaded) {
@@ -361,9 +340,7 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
         var texture = Texture.createEmpty2D();
 
         var img = try textureLoadImage(allocator, path, data.format);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB,
-            @intCast(c_int, img.width), @intCast(c_int, img.height),
-            0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB, @intCast(c_int, img.width), @intCast(c_int, img.height), 0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
         img.deinit();
         var t = try allocator.create(Texture);
         t.* = texture;
@@ -388,7 +365,7 @@ pub fn renderScene(scene: *Scene, window: Window) !void {
     c.glEnable(c.GL_DEPTH_TEST);
     c.glEnable(c.GL_FRAMEBUFFER_SRGB);
     //c.glEnable(c.GL_CULL_FACE);
-    
+
     var assets = &scene.assetManager;
     if (scene.camera) |camera| {
         var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.01, 100);
@@ -397,16 +374,8 @@ pub fn renderScene(scene: *Scene, window: Window) !void {
         // create the direction vector to be used with the view matrix.
         const yaw = camera.gameObject.rotation.x;
         const pitch = camera.gameObject.rotation.y;
-        const direction = zlm.Vec3.new(
-            std.math.cos(yaw) * std.math.cos(pitch),
-            std.math.sin(pitch),
-            std.math.sin(yaw) * std.math.cos(pitch)
-        );
-        const viewMatrix = zlm.Mat4.createLookAt(
-            camera.gameObject.position,
-            camera.gameObject.position.add(direction),
-            zlm.Vec3.new(0.0, 1.0, 0.0)
-        );
+        const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch));
+        const viewMatrix = zlm.Mat4.createLookAt(camera.gameObject.position, camera.gameObject.position.add(direction), zlm.Vec3.new(0.0, 1.0, 0.0));
         if (scene.skybox) |skybox| {
             if (camera.skyboxShader) |skyboxShader| {
                 skyboxShader.bind();
@@ -476,8 +445,15 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
         camera.shader.setUniformVec3("material.ambient", material.ambient);
         camera.shader.setUniformVec3("material.diffuse", material.diffuse);
         camera.shader.setUniformVec3("material.specular", material.specular);
-        var matrix = zlm.Mat4.createScale(gameObject.scale).mul(
-            zlm.Mat4.createTranslation(gameObject.position));
+        var s: f32 = material.shininess;
+        if (s <= 1.0) {
+            s = 1.0;
+        }
+        if (s >= 128.0) {
+            s = 128.0;
+        }
+        camera.shader.setUniformFloat("material.shininess", s);
+        var matrix = zlm.Mat4.createScale(gameObject.scale).mul(zlm.Mat4.createTranslation(gameObject.position));
         camera.shader.setUniformMat4("modelMatrix", matrix);
 
         if (mesh.hasEbo) {

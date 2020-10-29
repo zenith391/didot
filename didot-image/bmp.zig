@@ -9,25 +9,17 @@ const BmpError = error {
 };
 
 pub fn read(allocator: *Allocator, path: []const u8) !Image {
-    const cwd = std.fs.cwd();
-    const file = try cwd.openFile(path, .{
-        .read = true,
-        .write = false
-    });
+    const file = try std.fs.cwd().openFile(path, .{ .read = true });
     const reader = file.reader();
 
     var signature = try reader.readBytesNoEof(2);
-
-    if (!std.mem.eql(u8, signature[0..], "BM")) {
+    if (!std.mem.eql(u8, &signature, "BM")) {
         return BmpError.UnsupportedFormat;
     }
 
     var size = reader.readIntLittle(u32);
-
     _ = try reader.readBytesNoEof(4); // skip the reserved bytes
-
     var offset = try reader.readIntLittle(u32);
-
     var dibSize = try reader.readIntLittle(u32);
 
     if (dibSize == 108) { // BITMAPV4HEADER

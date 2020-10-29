@@ -29,15 +29,16 @@ const Chunk = struct {
     // PNG uses big-endian.
     pub fn toStruct(self: *Chunk, comptime T: type) T {
         var result: T = undefined;
+        var reader = self.stream.reader();
         inline for (@typeInfo(T).Struct.fields) |field| {
             const fieldInfo = @typeInfo(field.field_type);
             switch (fieldInfo) {
                 .Int => {
-                    const f = self.stream.reader().readIntBig(field.field_type) catch unreachable;
+                    const f = reader.readIntBig(field.field_type) catch unreachable;
                     @field(result, field.name) = f;
                 },
                 .Enum => |e| {
-                    const id = self.stream.reader().readIntBig(e.tag_type) catch unreachable;
+                    const id = reader.readIntBig(e.tag_type) catch unreachable;
                     @field(result, field.name) = @intToEnum(field.field_type, id);
                 },
                 else => unreachable

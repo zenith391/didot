@@ -7,6 +7,7 @@ const graphics = @import("didot-graphics");
 const objects = @import("didot-objects");
 const models = @import("didot-models");
 const image = @import("didot-image");
+//const physics = @import("didot-physics");
 const bmp = image.bmp;
 const obj = models.obj;
 const Application = @import("didot-app").Application;
@@ -93,14 +94,14 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject
     try scene.assetManager.put("Texture/Skybox", .{
         .loader = graphics.textureAssetLoader,
         .loaderData = try graphics.TextureAssetLoaderData.initCubemap(allocator, .{
-            .front = "assets/textures/skybox/front.png",
-            .back = "assets/textures/skybox/back.png",
-            .left = "assets/textures/skybox/left.png",
-            .right = "assets/textures/skybox/right.png",
-            .top = "assets/textures/skybox/top.png",
-            .bottom = "assets/textures/skybox/bottom.png",
-        }, "png"),
-        .objectType = .Texture,
+            .front = "assets/textures/skybox/front.bmp",
+            .back = "assets/textures/skybox/back.bmp",
+            .left = "assets/textures/skybox/left.bmp",
+            .right = "assets/textures/skybox/right.bmp",
+            .top = "assets/textures/skybox/top.bmp",
+            .bottom = "assets/textures/skybox/bottom.bmp"
+        }, "bmp"),
+        .objectType = .Texture
     });
 
     var skyboxMaterial = Material{ .texturePath = "Texture/Skybox" };
@@ -151,8 +152,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     camera.gameObject.updateFn = cameraInput;
     try scene.add(camera.gameObject);
 
-    var skybox = try loadSkybox(allocator, camera, scene);
-    try scene.add(skybox);
+    //var skybox = try loadSkybox(allocator, camera, scene);
+    //try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, "Mesh/Cube");
     cube.position = Vec3.new(10, -0.75, -10);
@@ -203,6 +204,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     light.gameObject.meshPath = "Mesh/Cube";
     light.gameObject.material.ambient = Vec3.one;
     try scene.add(light.gameObject);
+
+    //var world = physics.World.create();
 }
 
 var gp: std.heap.GeneralPurposeAllocator(.{}) = undefined;

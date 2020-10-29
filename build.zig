@@ -5,6 +5,7 @@ const Pkg = std.build.Pkg;
 
 pub const EngineConfig = struct {
     windowModule: []const u8 = "didot-glfw",
+    physicsModule: []const u8 = "didot-ode",
     /// Whether or not to automatically set the window module depending on the target platform.
     /// didot-glfw will be used for Windows and didot-x11 will be used for Linux.
     autoWindow: bool = true
@@ -71,6 +72,14 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         .path = "didot-objects/objects.zig",
         .dependencies = &[_]Pkg{zlm,graphics}
     };
+
+    const physics = Pkg {
+        .name = "didot-physics",
+        .path = config.physicsModule ++ "/physics.zig",
+        .dependencies = &[_]Pkg{objects}
+    };
+    try @import(config.physicsModule ++ "/build.zig").build(step);
+
     const app = Pkg {
         .name = "didot-app",
         .path = "didot-app/app.zig",
@@ -84,6 +93,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     step.addPackage(objects);
     step.addPackage(models);
     step.addPackage(app);
+    //step.addPackage(physics);
 }
 
 pub fn build(b: *Builder) !void {

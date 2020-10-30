@@ -95,7 +95,9 @@ const engine = @import("path/to/engine/build.zig");
 
 pub fn build(b: *Builder) !void {
     // your code ...
-    try engine.addEngineToExe(exe, .{});
+    try engine.addEngineToExe(exe, .{
+      .prefix = "path/to/engine/"
+    });
     // more code ...
 }
 ```

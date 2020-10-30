@@ -4,11 +4,15 @@ const LibExeObjStep = std.build.LibExeObjStep;
 const Pkg = std.build.Pkg;
 
 pub const EngineConfig = struct {
+    /// Path to where didot is relative to the game's build.zig file. Must end with a slash.
+    prefix: []const u8 = "",
     windowModule: []const u8 = "didot-glfw",
     physicsModule: []const u8 = "didot-ode",
     /// Whether or not to automatically set the window module depending on the target platform.
     /// didot-glfw will be used for Windows and didot-x11 will be used for Linux.
-    autoWindow: bool = true
+    autoWindow: bool = true,
+    /// Whether or not to include the physics module
+    usePhysics: bool = false
 };
 
 /// hacky workaround some compiler bug
@@ -16,14 +20,15 @@ var graphics_deps: [3]Pkg = undefined;
 
 pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void {
     var allocator = step.builder.allocator;
+    const prefix = config.prefix;
 
     const zlm = Pkg {
         .name = "zlm",
-        .path = "zlm/zlm.zig"
+        .path = prefix ++ "zlm/zlm.zig"
     };
     const image = Pkg {
         .name = "didot-image",
-        .path = "didot-image/image.zig"
+        .path = prefix ++ "didot-image/image.zig"
     };
 
     var windowModule = config.windowModule;
@@ -37,7 +42,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         }
     }
 
-    const windowPath = try std.mem.concat(allocator, u8, &[_][]const u8{windowModule, "/window.zig"});
+    const windowPath = try std.mem.concat(allocator, u8, &[_][]const u8{prefix, windowModule, "/window.zig"});
     if (std.mem.eql(u8, windowModule, "didot-glfw")) {
         step.linkSystemLibrary("glfw");
         step.linkSystemLibrary("c");
@@ -57,28 +62,29 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
 
     const graphics = Pkg {
         .name = "didot-graphics",
-        .path = "didot-opengl/graphics.zig",
+        .path = prefix ++ "didot-opengl/graphics.zig",
         .dependencies = &graphics_deps
     };
     step.linkSystemLibrary("GL");
     
     const models = Pkg {
         .name = "didot-models",
-        .path = "didot-models/models.zig",
+        .path = prefix ++ "didot-models/models.zig",
         .dependencies = &[_]Pkg{zlm,graphics}
     };
     const objects = Pkg {
         .name = "didot-objects",
-        .path = "didot-objects/objects.zig",
+        .path = prefix ++ "didot-objects/objects.zig",
         .dependencies = &[_]Pkg{zlm,graphics}
     };
 
     const physics = Pkg {
         .name = "didot-physics",
-        .path = config.physicsModule ++ "/physics.zig",
+        .path = prefix ++ config.physicsModule ++ "/physics.zig",
         .dependencies = &[_]Pkg{objects}
     };
-    try @import(config.physicsModule ++ "/build.zig").build(step);
+    if (config.usePhysics)
+        try @import(prefix ++ config.physicsModule ++ "/build.zig").build(step);
 
     const app = Pkg {
         .name = "didot-app",
@@ -93,7 +99,8 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     step.addPackage(objects);
     step.addPackage(models);
     step.addPackage(app);
-    //step.addPackage(physics);
+    if (config.usePhysics)
+        step.addPackage(physics);
 }
 
 pub fn build(b: *Builder) !void {

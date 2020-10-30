@@ -88,7 +88,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
 
     const app = Pkg {
         .name = "didot-app",
-        .path = "didot-app/app.zig",
+        .path = prefix ++ "didot-app/app.zig",
         .dependencies = &[_]Pkg{objects,graphics}
     };
 

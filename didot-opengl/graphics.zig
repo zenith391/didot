@@ -356,17 +356,21 @@ const GameObject = objects.GameObject;
 const Camera = objects.Camera;
 const AssetManager = objects.AssetManager;
 
-/// Set this function to replace normal pre-render behaviour (viewport, GL state, clear, etc.)
+/// Set this function to replace normal pre-render behaviour (GL state, clear, etc.), it happens after viewport
 var preRender: ?fn() void = null;
+/// Set this function to replace normal viewport behaviour
+var viewport: ?fn() zlm.Vec4 = null;
 
 /// Internal method for rendering a game scene.
 /// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)
 pub fn renderScene(scene: *Scene, window: Window) !void {
+    const size = window.getFramebufferSize();
+    const dims = if (viewport) |func| func() else zlm.vec4(0, 0, size.x, size.y);
+    c.glViewport(@floatToInt(c_int, @floor(dims.x)), @floatToInt(c_int, @floor(dims.y)),
+        @floatToInt(c_int, @floor(dims.z)), @floatToInt(c_int, @floor(dims.w)));
     if (preRender) |func| {
         func();
     } else {
-        const size = window.getFramebufferSize();
-        c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
         c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
         c.glEnable(c.GL_DEPTH_TEST);
         c.glEnable(c.GL_FRAMEBUFFER_SRGB);
@@ -375,7 +379,7 @@ pub fn renderScene(scene: *Scene, window: Window) !void {
 
     var assets = &scene.assetManager;
     if (scene.camera) |camera| {
-        var projMatrix = zlm.Mat4.createPerspective(camera.fov, size.x / size.y, 0.01, 100);
+        var projMatrix = zlm.Mat4.createPerspective(camera.fov, dims.z / dims.w, 0.01, 100);
         camera.shader.setUniformMat4("projMatrix", projMatrix);
 
         // create the direction vector to be used with the view matrix.

@@ -357,9 +357,9 @@ const Camera = objects.Camera;
 const AssetManager = objects.AssetManager;
 
 /// Set this function to replace normal pre-render behaviour (GL state, clear, etc.), it happens after viewport
-var preRender: ?fn() void = null;
+pub var preRender: ?fn() void = null;
 /// Set this function to replace normal viewport behaviour
-var viewport: ?fn() zlm.Vec4 = null;
+pub var viewport: ?fn() zlm.Vec4 = null;
 
 /// Internal method for rendering a game scene.
 /// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)

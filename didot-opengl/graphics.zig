@@ -356,15 +356,22 @@ const GameObject = objects.GameObject;
 const Camera = objects.Camera;
 const AssetManager = objects.AssetManager;
 
+/// Set this function to replace normal pre-render behaviour (viewport, GL state, clear, etc.)
+var preRender: ?fn() void = null;
+
 /// Internal method for rendering a game scene.
 /// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)
 pub fn renderScene(scene: *Scene, window: Window) !void {
-    const size = window.getFramebufferSize();
-    c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
-    c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
-    c.glEnable(c.GL_DEPTH_TEST);
-    c.glEnable(c.GL_FRAMEBUFFER_SRGB);
-    //c.glEnable(c.GL_CULL_FACE);
+    if (preRender) |func| {
+        func();
+    } else {
+        const size = window.getFramebufferSize();
+        c.glViewport(0, 0, @floatToInt(c_int, @floor(size.x)), @floatToInt(c_int, @floor(size.y)));
+        c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
+        c.glEnable(c.GL_DEPTH_TEST);
+        c.glEnable(c.GL_FRAMEBUFFER_SRGB);
+        //c.glEnable(c.GL_CULL_FACE);
+    }
 
     var assets = &scene.assetManager;
     if (scene.camera) |camera| {

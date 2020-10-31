@@ -343,7 +343,7 @@ pub const Scene = struct {
         std.debug.warn("{}\n", .{json});
     }
 
-    pub fn render(self: *Scene, window: Window) !void {
+    fn renderCommon(self: *Scene) void {
         var childs: GameObjectArrayList = self.gameObject.childrens;
 
         // TODO: only do this when a new child is inserted
@@ -363,7 +363,15 @@ pub const Scene = struct {
                 }
             }
         }
+    }
 
+    pub fn renderOffscreen(self: *Scene, viewport: zlm.Vec4) !void {
+        self.renderCommon();
+        try graphics.renderSceneOffscreen(self, viewport);
+    }
+
+    pub fn render(self: *Scene, window: Window) !void {
+        self.renderCommon();
         try graphics.renderScene(self, window);
     }
 

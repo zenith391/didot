@@ -12,6 +12,8 @@ This also works for graphics backend, so by using `didot-vulkan` (will come one 
 [API reference](https://zenith391.github.io/didot/#root)
 
 ## Features
+- [Scene editor](https://github.com/zenith391/didot-editor)
+- Assets manager
 - OpenGL backend
   - Shaders
   - Meshes

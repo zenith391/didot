@@ -2,6 +2,8 @@ const std = @import("std");
 const graphics = @import("didot-graphics");
 const Allocator = std.mem.Allocator;
 
+const runtime_safety = @import("builtin").mode == .Debug or @import("builtin").mode == .ReleaseSafe;
+
 pub const AssetType = enum(u8) {
     Mesh,
     Texture,
@@ -86,7 +88,7 @@ pub const AssetManager = struct {
     }
 
     pub inline fn isType(self: *AssetManager, key: []const u8, expected: AssetType) bool {
-        if (@import("builtin").mode == .Debug or @import("builtin").mode == .ReleaseSafe) {
+        if (runtime_safety) {
             if (self.assets.get(key)) |asset| {
                 return asset.objectType == expected;
             } else {
@@ -101,7 +103,7 @@ pub const AssetManager = struct {
         if (self.assets.get(key)) |*asset| {
             const value = try asset.get(self.allocator);
             try self.assets.put(key, asset.*);
-            if (asset.objectType != expected) {
+            if (runtime_safety and asset.objectType != expected) {
                 return AssetError.UnexpectedType;
             }
             return value;

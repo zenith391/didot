@@ -1,7 +1,9 @@
 const graphics = @import("didot-graphics");
 const zlm = @import("zlm");
 const std = @import("std");
-usingnamespace @import("assets.zig");
+
+pub usingnamespace @import("assets.zig");
+pub usingnamespace @import("components.zig");
 
 const Mesh = graphics.Mesh;
 const Window = graphics.Window;
@@ -21,6 +23,48 @@ pub var PrimitiveCubeMesh: Mesh = undefined;
 pub fn createSkybox(allocator: *Allocator) !GameObject {
     var go = GameObject.createCustom(allocator, "skybox", 0);
     return go;
+}
+
+pub fn createHeightmap(allocator: *Allocator, heightmap: [][]const f32) !Mesh {
+    const height = heightmap.len;
+    const width  = heightmap[0].len;
+    const sqLen = 0.5;
+
+    var vertices = try allocator.alloc(f32, width*height*(4*5)); // width*height*vertices*vertex size
+    defer allocator.free(vertices);
+    var elements = try allocator.alloc(c.GLuint, heightmap.len*height*6);
+    defer allocator.free(elements);
+
+    for (heightmap) |column, column_index| {
+        for (column) |cell, row_index| {
+            var pos: usize = (column_index*height+row_index)*(5*4);
+            var x: f32 = @intToFloat(f32, row_index)*sqLen*2;
+            var z: f32 = @intToFloat(f32, column_index)*sqLen*2;
+
+            var trY: f32 = 0.0;
+            var blY: f32 = 0.0;
+            var brY: f32 = 0.0;
+            if (column_index < height-1) trY = column[row_index+1];
+            if (column_index > 0) blY = heightmap[column_index-1][column_index];
+            if (column_index > 0 and column_index < width-1) brY = heightmap[column_index-1][column_index+1];
+
+            vertices[pos] = x-sqLen; vertices[pos+1] = cell; vertices[pos+2] = z+sqLen; vertices[pos+3] = 0.0; vertices[pos+4] = 0.0; // top-left
+            vertices[pos+5] = x-sqLen; vertices[pos+6] = blY; vertices[pos+7] = z-sqLen; vertices[pos+8] = 0.0; vertices[pos+9] = 1.0; // bottom-left
+            vertices[pos+10] = x+sqLen; vertices[pos+11] = brY; vertices[pos+12] = z-sqLen; vertices[pos+13] = 1.0; vertices[pos+14] = 1.0; // bottom-right
+            vertices[pos+15] = x+sqLen; vertices[pos+16] = trY; vertices[pos+17] = z+sqLen; vertices[pos+18] = 1.0; vertices[pos+19] = 0.0; // top-right
+
+            var vecPos: c.GLuint = @intCast(c.GLuint, (column_index*height+row_index)*4);
+            var elemPos: usize = (column_index*height+row_index)*6;
+            elements[elemPos] = vecPos;
+            elements[elemPos+1] = vecPos+1;
+            elements[elemPos+2] = vecPos+2;
+            elements[elemPos+3] = vecPos;
+            elements[elemPos+4] = vecPos+3;
+            elements[elemPos+5] = vecPos+2;
+        }
+    }
+
+    return Mesh.create(vertices, elements);
 }
 
 /// This function must be called before primitive meshes (like PrimitiveCubeMesh) can be used.
@@ -134,14 +178,13 @@ pub const GameObject = struct {
     //mesh: ?Mesh = null,
     meshPath: ?[]const u8 = null,
     name: []const u8 = "Game Object",
-    /// Functions called regularly depending on the updateTarget value of the Application.
-    updateFn: ?fn(allocator: *Allocator, gameObject: *GameObject, delta: f32) anyerror!void = null,
     position: zlm.Vec3 = zlm.Vec3.zero,
     /// In order: yaw, pitch, roll.
     /// Note: this will be replaced with quaternions very soon!
     rotation: zlm.Vec3 = zlm.Vec3.zero,
     scale: zlm.Vec3 = zlm.Vec3.one,
     childrens: GameObjectArrayList,
+    components: std.ArrayList(Component),
 
     /// Type of object owning this game object ("camera", "scene", etc.)
     objectType: ?[]const u8 = null,
@@ -156,7 +199,8 @@ pub const GameObject = struct {
     pub fn createEmpty(allocator: *Allocator) GameObject {
         var childs = GameObjectArrayList.init(allocator);
         return GameObject {
-            .childrens = childs
+            .childrens = childs,
+            .components = std.ArrayList(Component).init(allocator)
         };
     }
 
@@ -165,7 +209,8 @@ pub const GameObject = struct {
         var childs = GameObjectArrayList.init(allocator);
         return GameObject {
             .childrens = childs,
-            .meshPath = meshPath
+            .meshPath = meshPath,
+            .components = std.ArrayList(Component).init(allocator)
         };
     }
 
@@ -176,14 +221,16 @@ pub const GameObject = struct {
             .childrens = childs,
             .objectType = customType,
             .objectPointer = ptr,
-            .objectAllocator = allocator
+            .objectAllocator = allocator,
+            .components = std.ArrayList(Component).init(allocator)
         };
     }
 
     pub fn update(self: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
-        if (self.updateFn) |func| {
-            try func(allocator, self, delta);
+        for (self.components.items) |*component| {
+            try component.update(allocator, self, delta);
         }
+
         for (self.childrens.items) |*child| {
             try child.update(allocator, delta); // TODO: correctly handle errors
         }
@@ -237,6 +284,10 @@ pub const GameObject = struct {
     /// Add a game object as children to this game object.
     pub fn add(self: *GameObject, go: GameObject) !void {
         try self.childrens.append(go);
+    }
+
+    pub fn addComponent(self: *GameObject, cp: Component) !void {
+        try self.components.append(cp);
     }
 
     /// Frees childrens array list (not childrens themselves!), the object associated to it and itself.
@@ -393,36 +444,6 @@ pub const Scene = struct {
         self.assetManager.deinit();
     }
 };
-
-pub const ComponentOptions = struct {
-    /// Functions called regularly depending on the updateTarget value of the Application.
-    updateFn: ?fn(allocator: *Allocator, component: *Component, gameObject: *GameObject, delta: f32) anyerror!void = null
-};
-
-// TODO: redo components
-pub const Component = struct {
-    options: ComponentOptions,
-    data: usize,
-
-    pub fn update(self: *Component, gameObject: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
-        if (self.options.updateFn) |func| {
-            try func(allocator, self, gameObject, delta);
-        }
-    }
-};
-
-pub fn ComponentType(comptime name: @Type(.EnumLiteral), comptime Data: @Type(.Struct), options: ComponentOptions) type {
-    return struct {
-        pub fn new() Component {
-            var data = Data {};
-            var cp = Component {
-                .options = options,
-                .data = @ptrToInt(&data)
-            };
-            return cp;
-        }
-    };
-}
 
 // Tests
 const expect = std.testing.expect;

@@ -279,6 +279,14 @@ fn cubemapThread(data: *CubemapThreadStruct) !void {
     data.image = try textureLoadImage(data.allocator, data.path, data.format);
 }
 
+inline fn getTextureFormat(format: image.ImageFormat) c.GLuint {
+    return switch (format) {
+        .RGB24 => c.GL_RGB,
+        .BGR24 => c.GL_BGR,
+        else => c.GL_RGB
+    };
+}
+
 pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
     var data = @intToPtr(*TextureAssetLoaderData, dataPtr);
     if (data.cubemap) |cb| {
@@ -300,7 +308,7 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
                 const img = try textureLoadImage(allocator, path, data.format);
                 c.glTexImage2D(targets[i], 0, c.GL_SRGB,
                     @intCast(c_int, img.width), @intCast(c_int, img.height),
-                    0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+                    0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
                 img.deinit();
                 i += 1;
             }
@@ -329,7 +337,7 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
                 const img = structs[j].image;
                 c.glTexImage2D(targets[j], 0, c.GL_SRGB,
                     @intCast(c_int, img.width), @intCast(c_int, img.height),
-                    0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+                    0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
                 img.deinit();
             }
         }
@@ -340,7 +348,8 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
         var texture = Texture.createEmpty2D();
 
         var img = try textureLoadImage(allocator, path, data.format);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB, @intCast(c_int, img.width), @intCast(c_int, img.height), 0, c.GL_RGB, c.GL_UNSIGNED_BYTE, &img.data[0]);
+        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB, @intCast(c_int, img.width), @intCast(c_int, img.height),
+            0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
         img.deinit();
         var t = try allocator.create(Texture);
         t.* = texture;

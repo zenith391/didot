@@ -7,6 +7,7 @@ const Allocator = std.mem.Allocator;
 const Window = graphics.Window;
 const Scene = objects.Scene;
 
+/// Helper class for using Didot.
 pub const Application = struct {
     /// How many time per second updates should be called, defaults to 60 updates/s.
     updateTarget: u32 = 60,
@@ -18,7 +19,11 @@ pub const Application = struct {
     allocator: *Allocator = undefined,
     /// Optional function to be called on application init.
     initFn: ?fn(allocator: *Allocator, app: *Application) anyerror!void = null,
+    /// Optional function to be called on each application update.
+    /// This function, depending on settings, might not execute on the main thread.
+    updateFn: ?fn(tempAllocator: *Allocator, app: *Application, delta: f32) anyerror!void = null,
     closing: bool = false,
+    lastUpdateTime: i64 = 0,
 
     /// Initialize the application using the given allocator and scene.
     /// This creates a window, init primitives and call the init function if set.
@@ -28,6 +33,7 @@ pub const Application = struct {
         self.scene = scene;
         self.window = window;
         self.allocator = allocator;
+        self.lastUpdateTime = std.time.milliTimestamp();
         objects.initPrimitives();
         
         try scene.assetManager.put("Mesh/Cube", .{
@@ -46,29 +52,37 @@ pub const Application = struct {
         }
     }
 
-    fn updateLoop(self: *Application) void {
-        var lastTime: i64 = std.time.milliTimestamp();
-        while (!self.closing) {
-            var arena = std.heap.ArenaAllocator.init(self.allocator);
-            const allocator = &arena.allocator;
+    inline fn printErr(err: anyerror) void {
+        std.debug.warn("{}", .{@errorName(err)});
+        if (@errorReturnTrace()) |trace| {
+            std.debug.dumpStackTrace(trace.*);
+        }
+    }
 
-            const s_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * 1000;
-            const time = std.time.milliTimestamp();
-            const delta = @floatCast(f32, @intToFloat(f64, time-lastTime) / s_per_frame);
-            self.scene.gameObject.update(self.allocator, delta) catch |err| {
-                // TODO: correctly handle errors
-                std.debug.warn("{}", .{@errorName(err)});
-                if (@errorReturnTrace()) |trace| {
-                    std.debug.dumpStackTrace(trace.*);
-                }
-                //@panic("error");
-            };
+    fn updateTick(self: *Application, comptime doSleep: bool) void {
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        const allocator = &arena.allocator;
+
+        const s_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * 1000;
+        const time = std.time.milliTimestamp();
+        const delta = @floatCast(f32, @intToFloat(f64, time-self.lastUpdateTime) / s_per_frame);
+        self.scene.gameObject.update(self.allocator, delta) catch |err| printErr(err);
+        if (self.updateFn) |func| {
+            func(allocator, self, delta) catch |err| printErr(err);
+        }
+        self.lastUpdateTime = std.time.milliTimestamp();
+        arena.deinit();
+        if (doSleep) {
             const wait = @floatToInt(u64, 
                 @floor((1.0/@intToFloat(f64, self.updateTarget))*1000000000.0)
             );
-            lastTime = std.time.milliTimestamp();
             std.time.sleep(wait);
-            arena.deinit();
+        }
+    }
+
+    fn updateLoop(self: *Application) void {
+        while (!self.closing) {
+            self.updateTick(true);
         }
     }
 
@@ -81,10 +95,7 @@ pub const Application = struct {
         }
         while (self.window.update()) {
             if (single_threaded) {
-                var arena = std.heap.ArenaAllocator.init(self.allocator);
-                const allocator = &arena.allocator;
-                try self.scene.gameObject.update(allocator, 1);
-                arena.deinit();
+                self.updateTick(false);
             }
             try self.scene.render(self.window);
         }

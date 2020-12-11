@@ -293,6 +293,10 @@ pub const GameObject = struct {
     /// Frees childrens array list (not childrens themselves!), the object associated to it and itself.
     pub fn deinit(self: *const GameObject) void {
         self.childrens.deinit();
+        for (self.components.items) |*component| {
+            component.deinit();
+        }
+        self.components.deinit();
         if (self.objectAllocator) |alloc| {
             if (self.objectPointer != 0) {
                 alloc.destroy(@intToPtr(*u8, self.objectPointer));

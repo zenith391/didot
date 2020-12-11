@@ -235,7 +235,7 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
             .data = imageData,
             .width = ihdr.width,
             .height = ihdr.height,
-            .format = .RGB24
+            .format = @import("image.zig").ImageFormat.RGB24
         };
     } else {
         return PngError.UnsupportedFormat;

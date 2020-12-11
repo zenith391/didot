@@ -280,11 +280,13 @@ fn cubemapThread(data: *CubemapThreadStruct) !void {
 }
 
 inline fn getTextureFormat(format: image.ImageFormat) c.GLuint {
-    return switch (format) {
-        .RGB24 => c.GL_RGB,
-        .BGR24 => c.GL_BGR,
-        else => c.GL_RGB
-    };
+    if (format.redMask == 0xFF0000 and format.greenMask == 0xFF00 and format.blueMask == 0xFF and format.bitsSize == 24) {
+        return c.GL_RGB;
+    } else if (format.redMask == 0xFF and format.greenMask == 0xFF00 and format.blueMask == 0xFF0000 and format.bitsSize == 24) {
+        return c.GL_BGR;
+    } else {
+        unreachable; // TODO convert the source image to RGB
+    }
 }
 
 pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {

@@ -1,9 +1,8 @@
 const std = @import("std");
-const LibExeObjStep = std.build.LibExeObjStep;
 
 const ODE = "didot-ode/ode-0.16.2";
 
-pub fn build(step: *LibExeObjStep) !void {
+pub fn build(step: *std.build.LibExeObjStep) !void {
     // const b = step.builder;
     // const cwd = try std.process.getCwdAlloc(b.allocator);
     // const odePWD = try std.mem.concat(b.allocator, u8, &([_][]const u8{cwd, "/" ++ ODE}));
@@ -18,7 +17,7 @@ pub fn build(step: *LibExeObjStep) !void {
     // const flags = [_][]const u8 {"-iquote", ODE};
     // step.addCSourceFile(ODE ++ "/ode/src/array.cpp", &flags);
     step.addIncludeDir(ODE ++ "/include");
-    step.addLibPath(ODE ++ "/ode/src/.libs/");
-    step.linkSystemLibrary("ode");
-    step.linkSystemLibrary("stdc++");
+    //step.addLibPath(ODE ++ "/ode/src/.libs/");
+    step.linkSystemLibraryName("ode");
+    //step.linkSystemLibraryName("stdc++");
 }

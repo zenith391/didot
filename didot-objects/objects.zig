@@ -179,7 +179,7 @@ pub const GameObject = struct {
     meshPath: ?[]const u8 = null,
     name: []const u8 = "Game Object",
     position: zlm.Vec3 = zlm.Vec3.zero,
-    /// In order: yaw, pitch, roll.
+    /// In order: roll, pitch, yaw. Angles are in radians.
     /// Note: this will be replaced with quaternions very soon!
     rotation: zlm.Vec3 = zlm.Vec3.zero,
     scale: zlm.Vec3 = zlm.Vec3.one,

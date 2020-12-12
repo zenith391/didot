@@ -81,7 +81,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     const physics = Pkg {
         .name = "didot-physics",
         .path = prefix ++ config.physicsModule ++ "/physics.zig",
-        .dependencies = &[_]Pkg{objects}
+        .dependencies = &[_]Pkg{objects, zlm}
     };
     if (config.usePhysics)
         try @import(prefix ++ config.physicsModule ++ "/build.zig").build(step);
@@ -113,7 +113,8 @@ pub fn build(b: *Builder) !void {
     exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
     try addEngineToExe(exe, .{
         //.windowModule = "didot-x11"
-        .autoWindow = false
+        .autoWindow = false,
+        .usePhysics = true
     });
     exe.single_threaded = stripExample;
     exe.strip = stripExample;

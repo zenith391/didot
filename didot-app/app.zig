@@ -66,10 +66,10 @@ pub const Application = struct {
         const s_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * 1000;
         const time = std.time.milliTimestamp();
         const delta = @floatCast(f32, @intToFloat(f64, time-self.lastUpdateTime) / s_per_frame);
-        self.scene.gameObject.update(self.allocator, delta) catch |err| printErr(err);
         if (self.updateFn) |func| {
             func(allocator, self, delta) catch |err| printErr(err);
         }
+        self.scene.gameObject.update(self.allocator, delta) catch |err| printErr(err);
         self.lastUpdateTime = std.time.milliTimestamp();
         arena.deinit();
         if (doSleep) {

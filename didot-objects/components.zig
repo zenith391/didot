@@ -20,7 +20,11 @@ pub const Component = struct {
     }
 
     pub inline fn getData(self: *const Component, comptime T: type) *T {
-        return @intToPtr(*T, self.data);
+        if (@sizeOf(T) == 0) {
+            return undefined;
+        } else {
+            return @intToPtr(*T, self.data);
+        }
     }
 
     pub fn deinit(self: *Component) void {

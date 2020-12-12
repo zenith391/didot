@@ -7,7 +7,7 @@ const graphics = @import("didot-graphics");
 const objects = @import("didot-objects");
 const models = @import("didot-models");
 const image = @import("didot-image");
-//const physics = @import("didot-physics");
+const physics = @import("didot-physics");
 const bmp = image.bmp;
 const obj = models.obj;
 const Application = @import("didot-app").Application;
@@ -22,6 +22,9 @@ const GameObject = objects.GameObject;
 const Scene = objects.Scene;
 const Camera = objects.Camera;
 const PointLight = objects.PointLight;
+
+var world: physics.World = undefined;
+var simPaused: bool = false;
 
 const Component = objects.Component;
 const CameraControllerData = struct { input: *Input };
@@ -49,6 +52,7 @@ fn cameraInput(allocator: *Allocator, component: *Component, gameObject: *GameOb
 
     if (input.isMouseButtonDown(.Left)) {
         input.setMouseInputMode(.Grabbed);
+        simPaused = false;
     } else if (input.isMouseButtonDown(.Right)) {
         input.setMouseInputMode(.Normal);
     } else if (input.isKeyDown(Input.KEY_ESCAPE)) {
@@ -137,7 +141,15 @@ fn initFromFile(allocator: *Allocator, app: *Application) !void {
     // }
 }
 
+fn update(allocator: *Allocator, app: *Application, delta: f32) !void {
+    if (!simPaused)
+        world.update();
+}
+
 fn init(allocator: *Allocator, app: *Application) !void {
+    world = physics.World.create();
+    world.setGravity(zlm.Vec3.new(0, -9.8, 0));
+
     var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
     const scene = app.scene;
 
@@ -159,15 +171,17 @@ fn init(allocator: *Allocator, app: *Application) !void {
     //try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, "Mesh/Cube");
-    cube.position = Vec3.new(10, -0.75, -10);
-    cube.scale = Vec3.new(20, 1, 20);
+    cube.position = Vec3.new(-10, -0.75, -10);
+    cube.scale = Vec3.new(25, 1, 25);
     cube.material = grassMaterial;
+    try cube.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world, .kinematic=.Kinematic }));
     try scene.add(cube);
 
     var cube2 = GameObject.createObject(allocator, "Mesh/Cube");
-    cube2.position = Vec3.new(-1.2, 0.75, -3);
+    cube2.position = Vec3.new(-1.2, 5.75, -3);
     cube2.material.ambient = Vec3.new(0.2, 0.1, 0.1);
     cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
+    try cube2.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world = &world }));
     try scene.add(cube2);
 
     try scene.assetManager.put("Mesh/Kart", .{
@@ -178,6 +192,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var kart = GameObject.createObject(allocator, "Mesh/Kart");
     kart.position = Vec3.new(0.7, 0.75, -5);
     kart.name = "Kart";
+    try kart.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world = &world }));
     try scene.add(kart);
 
     var i: f32 = 0;
@@ -207,8 +222,6 @@ fn init(allocator: *Allocator, app: *Application) !void {
     light.gameObject.material.ambient = Vec3.one;
     try light.gameObject.addComponent(try TestLight.new(allocator));
     try scene.add(light.gameObject);
-
-    //var world = physics.World.create();
 }
 
 var gp: std.heap.GeneralPurposeAllocator(.{}) = .{};
@@ -220,6 +233,7 @@ pub fn main() !void {
     var app = Application{
         .title = "Test Cubes",
         .initFn = init,
+        .updateFn = update,
     };
     try app.start(allocator, scene);
 }

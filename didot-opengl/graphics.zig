@@ -478,7 +478,11 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
             s = 128.0;
         }
         camera.shader.setUniformFloat("material.shininess", s);
-        var matrix = zlm.Mat4.createScale(gameObject.scale).mul(zlm.Mat4.createTranslation(gameObject.position));
+        const rotMatrix = 
+            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), gameObject.rotation.x).mul(
+            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), gameObject.rotation.y).mul(
+            zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), gameObject.rotation.z)));
+        const matrix = zlm.Mat4.createScale(gameObject.scale).mul(rotMatrix.mul(zlm.Mat4.createTranslation(gameObject.position)));
         camera.shader.setUniformMat4("modelMatrix", matrix);
 
         if (mesh.hasEbo) {

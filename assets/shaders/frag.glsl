@@ -29,6 +29,9 @@ uniform sampler2D tex;
 uniform bool useTex;
 uniform bool useLight;
 
+uniform float xTiling;
+uniform float yTiling;
+
 vec3 computeLight(vec3 norm, vec3 viewDir, PointLight light) {
 	vec3 lightDir = normalize(light.position - fragPos);
 	float distance = length(light.position - fragPos);
@@ -61,7 +64,8 @@ void main() {
 	}
 
 	if (useTex) {
-		outColor = texture(tex, texCoord) * vec4(result, 1.0);
+		vec2 fTexCoord = vec2(texCoord.x * xTiling, texCoord.y * yTiling);
+		outColor = texture(tex, fTexCoord) * vec4(result, 1.0);
 	} else {
 		outColor = vec4(result, 1.0);
 	}

@@ -71,19 +71,19 @@ const IHDR = struct {
     interlaceMethod: u8
 };
 
-fn filterNone(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
+fn filterNone(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
     return sample;
 }
 
-fn filterSub(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
-    if (x < 3) {
+fn filterSub(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
+    if (x < bytes) {
         return sample;
     } else {
-        return sample +% image[pos-3];
+        return sample +% image[pos-bytes];
     }
 }
 
-fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
+fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
     if (y == 0) {
         return sample;
     } else {
@@ -91,18 +91,18 @@ fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos
     }
 }
 
-fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
-    var val: u16 = if (x >= 3) image[pos-3] else 0; // val = a
+fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
+    var val: u16 = if (x >= bytes) image[pos-bytes] else 0; // val = a
     if (y > 0) {
         val += image[pos-width]; // val = a + b
     }
     return sample +% @intCast(u8, val / 2);
 }
 
-fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize) u8 {
-    const a: i32 = if (x >= 3) image[pos-3] else 0;
+fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
+    const a: i32 = if (x >= bytes) image[pos-bytes] else 0;
     const b: i32 = if (y > 0) image[pos-width] else 0;
-    const c: i32 = if (x >= 3 and y > 0) image[pos-width-3] else 0;
+    const c: i32 = if (x >= bytes and y > 0) image[pos-width-bytes] else 0;
 
     const p: i32 = a + b - c;
     // the minimum value of p is -255, minus the minimum value of a/b/c, the minimum result is -510, so using unreachable is safe
@@ -199,11 +199,15 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
     }).reader();
 
     // allocate image data (TODO: support more than RGB)
-    const imageData = try allocator.alloc(u8, ihdr.width*ihdr.height*3);
+    var bpp: u32 = 3;
+    if (ihdr.colorType == .TruecolorAlpha) {
+        bpp = 4;
+    }
+    const imageData = try allocator.alloc(u8, ihdr.width*ihdr.height*bpp);
+    var x: u32 = 0;
+        var y: u32 = 0;
 
     if (ihdr.colorType == .Truecolor) {
-        var x: u32 = 0;
-        var y: u32 = 0;
         var pixel: [3]u8 = undefined;
         const bytesPerLine = ihdr.width * 3;
         while (y < ihdr.height) {
@@ -221,9 +225,9 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
             while (x < bytesPerLine) {
                 const pos = y*bytesPerLine + x;
                 _ = try idatReader.readAll(&pixel);
-                imageData[pos] = filter(imageData, pixel[0], x, y, bytesPerLine, pos);
-                imageData[pos+1] = filter(imageData, pixel[1], x+1, y, bytesPerLine, pos+1);
-                imageData[pos+2] = filter(imageData, pixel[2], x+2, y, bytesPerLine, pos+2);
+                imageData[pos] = filter(imageData, pixel[0], x, y, bytesPerLine, pos, 3);
+                imageData[pos+1] = filter(imageData, pixel[1], x+1, y, bytesPerLine, pos+1, 3);
+                imageData[pos+2] = filter(imageData, pixel[2], x+2, y, bytesPerLine, pos+2, 3);
                 x += 3; // since we use 3 bytes per pixel, let's directly increment X by 3
                 // (that optimisation is also useful in the filter method)
             }
@@ -237,7 +241,43 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
             .height = ihdr.height,
             .format = @import("image.zig").ImageFormat.RGB24
         };
-    } else {
+    } else if (ihdr.colorType == .TruecolorAlpha) {
+        var pixel: [4]u8 = undefined;
+        const bytesPerLine = ihdr.width * 4;
+        while (y < ihdr.height) {
+            x = 0;
+            // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
+            const filterType = try idatReader.readByte();
+            const filter = switch (filterType) {
+                0 => filterNone,
+                1 => filterSub,
+                2 => filterUp,
+                3 => filterAverage,
+                4 => filterPaeth,
+                else => return error.InvalidFilter
+            };
+            while (x < bytesPerLine) {
+                const pos = y*bytesPerLine + x;
+                _ = try idatReader.readAll(&pixel);
+                imageData[pos] = filter(imageData, pixel[0], x, y, bytesPerLine, pos, 4);
+                imageData[pos+1] = filter(imageData, pixel[1], x+1, y, bytesPerLine, pos+1, 4);
+                imageData[pos+2] = filter(imageData, pixel[2], x+2, y, bytesPerLine, pos+2, 4);
+                imageData[pos+3] = filter(imageData, pixel[3], x+3, y, bytesPerLine, pos+3, 4);
+                x += 4; // since we use 3 bytes per pixel, let's directly increment X by 3
+                // (that optimisation is also useful in the filter method)
+            }
+            y += 1;
+        }
+
+        return Image {
+            .allocator = allocator,
+            .data = imageData,
+            .width = ihdr.width,
+            .height = ihdr.height,
+            .format = @import("image.zig").ImageFormat.RGBA32
+        };
+        } else {
+        std.log.scoped(.didot).err("Unsupported PNG format: {}", .{ihdr.colorType});
         return PngError.UnsupportedFormat;
     }
 }

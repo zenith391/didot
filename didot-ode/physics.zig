@@ -30,13 +30,16 @@ pub const World = struct {
     space: dSpaceID,
     /// Group for contact joints.
     contactGroup: dJointGroupID,
+    lastStep: i64,
+    accumulatedStep: f64 = 0.0,
 
     pub fn create() World {
         ensureInit();
         return World {
             .id = dWorldCreate(),
             .space = dHashSpaceCreate(null),
-            .contactGroup = dJointGroupCreate(0)
+            .contactGroup = dJointGroupCreate(0),
+            .lastStep = std.time.milliTimestamp()
         };
     }
 
@@ -46,11 +49,11 @@ pub const World = struct {
         const self = @ptrCast(*World, @alignCast(@alignOf(World), data.?));
 
         var contact: dContact = undefined;
-        contact.surface.mode = dContactBounce | dContactSoftCFM;
+        contact.surface.mode = dContactBounce;
         contact.surface.mu = std.math.inf(dReal);
-        contact.surface.bounce = 0.5;
-        contact.surface.bounce_vel = 0.2;
-        contact.surface.soft_cfm = 0.001;
+        contact.surface.bounce = 0.2;
+        contact.surface.bounce_vel = 10;
+        contact.surface.soft_cfm = 0.1;
         const numc = dCollide(o1, o2, 1, &contact.geom, @sizeOf(dContact));
         if (numc != 0) {
             const c = dJointCreateContact(self.id, self.contactGroup, &contact);
@@ -60,13 +63,21 @@ pub const World = struct {
 
     pub fn setGravity(self: *World, gravity: zlm.Vec3) void {
         dWorldSetGravity(self.id, gravity.x, gravity.y, gravity.z);
-        dWorldSetCFM(self.id, 0.00001);
+        dWorldSetERP(self.id, 0.1);
+        //dWorldSetCFM(self.id, 0.0000);
     }
 
     pub fn update(self: *World) void {
-        dSpaceCollide(self.space, self, nearCallback);
-        _ = dWorldStep(self.id, 0.0167);
-        dJointGroupEmpty(self.contactGroup);
+        self.accumulatedStep += @intToFloat(f64, std.time.milliTimestamp())/1000 - @intToFloat(f64, self.lastStep)/1000;
+        if (self.accumulatedStep > 0.1) self.accumulatedStep = 0.1;
+        const timeStep = 0.01;
+        while (self.accumulatedStep > timeStep) {
+            dSpaceCollide(self.space, self, nearCallback);
+            _ = dWorldQuickStep(self.id, timeStep);
+            dJointGroupEmpty(self.contactGroup);
+            self.accumulatedStep -= timeStep;
+        }
+        self.lastStep = std.time.milliTimestamp();
     }
 
     pub fn deinit(self: *const World) void {
@@ -84,7 +95,12 @@ pub const RigidbodyData = struct {
     world: *World,
     body: dBodyID = undefined,
     geom: dGeomID = undefined,
-    kinematic: KinematicState = .Dynamic
+    mass: dMass = undefined,
+    kinematic: KinematicState = .Dynamic,
+
+    pub fn addForce(self: *RigidbodyData, force: zlm.Vec3) void {
+        dBodyAddForce(self.body, force.x, force.y, force.z);
+    }
 };
 pub const Rigidbody = objects.ComponentType(.Rigidbody, RigidbodyData, .{ .updateFn = rigidbodyUpdate }) {};
 
@@ -110,19 +126,25 @@ fn rigidbodyUpdate(allocator: *Allocator, component: *Component, gameObject: *Ga
         std.debug.warn("Init rigidbody!\n", .{});
         data.body = dBodyCreate(data.world.id);
         data.geom = dCreateBox(data.world.space, 1.0, 1.0, 1.0);
+        dMassSetBox(&data.mass, 1.0, 1.0, 1.0, 1.0);
         dGeomSetBody(data.geom, data.body);
         dBodySetPosition(data.body, gameObject.position.x, gameObject.position.y, gameObject.position.z);
         dBodySetData(data.body, data);
+        dBodySetMass(data.body, &data.mass);
+        dBodySetDamping(data.body, 0.001, 0.001);
+        dBodySetAutoDisableFlag(data.body, 1);
         data.inited = true;
     }
-    switch (data.kinematic) {
-        .Dynamic => dBodySetDynamic(data.body),
-        .Kinematic => dBodySetKinematic(data.body)
+    if (dBodyIsEnabled(data.body) != 0) {
+        switch (data.kinematic) {
+            .Dynamic => dBodySetDynamic(data.body),
+            .Kinematic => dBodySetKinematic(data.body)
+        }
+        const scale = gameObject.scale;
+        dGeomBoxSetLengths(data.geom, scale.x, scale.y, scale.z);
+        const pos = dBodyGetPosition(data.body);
+        const rot = quatToEuler(dBodyGetQuaternion(data.body));
+        gameObject.rotation = rot;
+        gameObject.position = zlm.Vec3.new(pos[0], pos[1], pos[2]);
     }
-    const scale = gameObject.scale;
-    dGeomBoxSetLengths(data.geom, scale.x, scale.y, scale.z);
-    const pos = dBodyGetPosition(data.body);
-    const rot = quatToEuler(dBodyGetQuaternion(data.body));
-    gameObject.rotation = rot;
-    gameObject.position = zlm.Vec3.new(pos[0], pos[1], pos[2]);
 }

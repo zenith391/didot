@@ -12,8 +12,10 @@ pub const XWindowAttributes = c.XWindowAttributes;
 pub const Window = c.Window;
 pub const Display = c.Display;
 pub const XEvent = c.XEvent;
+pub const XKeyEvent = c.XKeyEvent;
 pub const Colormap = c.Colormap;
 pub const Visual = c.Visual;
+pub const KeySym = c.KeySym;
 
 pub const CWBackPixmap = @as(c_long, 1) << 0;
 pub const CWBackPixel = @as(c_long, 1) << 1;
@@ -57,6 +59,11 @@ pub const PropertyChangeMask = @as(c_long, 1) << 22;
 pub const ColormapChangeMask = @as(c_long, 1) << 23;
 pub const OwnerGrabButtonMask = @as(c_long, 1) << 24;
 
+pub const MotionNotify = c.MotionNotify;
+pub const Expose = c.Expose;
+pub const KeyPress = c.KeyPress;
+pub const KeyRelease = c.KeyRelease;
+
 pub const None = c.None;
 pub const CopyFromParent = c.CopyFromParent;
 pub const AllocNone = c.AllocNone;
@@ -90,6 +97,9 @@ pub extern fn XGetWindowAttributes(?*Display, Window, [*c]XWindowAttributes) c_i
 pub extern fn XNextEvent(?*Display, [*c]XEvent) c_int;
 pub extern fn XPending(?*Display) c_int;
 pub extern fn XDestroyWindow(?*Display, Window) c_int;
+pub extern fn XLookupKeysym(?*XKeyEvent, c_int) KeySym;
+pub extern fn XKeysymToString(KeySym) [*:0]const u8;
+
 
 pub extern fn glXChooseVisual(dpy: ?*Display, screen: c_int, attribList: [*c]c_int) [*c]XVisualInfo;
 pub extern fn glXCreateContext(dpy: ?*Display, vis: [*c]XVisualInfo, shareList: GLXContext, direct: c_int) GLXContext;

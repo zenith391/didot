@@ -194,6 +194,8 @@ pub const GameObject = struct {
     /// The allocator used to create objectPointer, if any.
     objectAllocator: ?*Allocator = null,
     material: Material = Material.default,
+    /// Lock used when accesing the game object's tree
+    treeLock: std.Mutex = .{},
 
     /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
     pub fn createEmpty(allocator: *Allocator) GameObject {
@@ -237,8 +239,18 @@ pub const GameObject = struct {
     }
 
     pub fn findChild(self: *const GameObject, name: []const u8) ?*GameObject {
+        const held = self.treeLock.acquire();
+        defer held.release();
         for (self.childrens.items) |*child| {
             if (std.mem.eql(u8, child.name, name)) return child;
+        }
+        return null;
+    }
+
+    pub fn findComponent(self: *const GameObject, comptime nameTag: @Type(.EnumLiteral)) ?*Component {
+        const name = @tagName(nameTag);
+        for (self.components.items) |*component| {
+            if (std.mem.eql(u8, component.name.*, name)) return component;
         }
         return null;
     }
@@ -283,6 +295,8 @@ pub const GameObject = struct {
 
     /// Add a game object as children to this game object.
     pub fn add(self: *GameObject, go: GameObject) !void {
+        const held = self.treeLock.acquire();
+        defer held.release();
         try self.childrens.append(go);
     }
 

@@ -25,6 +25,7 @@ const PointLight = objects.PointLight;
 
 var world: physics.World = undefined;
 var simPaused: bool = false;
+var cube2: GameObject = undefined;
 
 const Component = objects.Component;
 const CameraControllerData = struct { input: *Input };
@@ -48,6 +49,22 @@ fn cameraInput(allocator: *Allocator, component: *Component, gameObject: *GameOb
     }
     if (input.isKeyDown(Input.KEY_D)) {
         gameObject.position = gameObject.position.add(left.scale(-speed));
+    }
+
+    if (input.isKeyDown(Input.KEY_UP)) {
+        if (cube2.findComponent(.Rigidbody)) |rb| {
+            rb.getData(physics.RigidbodyData).addForce(zlm.Vec3.new(0, 20, 0));
+        }
+    }
+    if (input.isKeyDown(Input.KEY_LEFT)) {
+        if (cube2.findComponent(.Rigidbody)) |rb| {
+            rb.getData(physics.RigidbodyData).addForce(zlm.Vec3.new(5, 0, 0));
+        }
+    }
+    if (input.isKeyDown(Input.KEY_RIGHT)) {
+        if (cube2.findComponent(.Rigidbody)) |rb| {
+            rb.getData(physics.RigidbodyData).addForce(zlm.Vec3.new(0, 0, 5));
+        }
     }
 
     if (input.isMouseButtonDown(.Left)) {
@@ -101,13 +118,13 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject
     try scene.assetManager.put("Texture/Skybox", .{
         .loader = graphics.textureAssetLoader,
         .loaderData = try graphics.TextureAssetLoaderData.initCubemap(allocator, .{
-            .front = "assets/textures/skybox/front.png",
-            .back = "assets/textures/skybox/back.png",
-            .left = "assets/textures/skybox/left.png",
-            .right = "assets/textures/skybox/right.png",
-            .top = "assets/textures/skybox/top.png",
-            .bottom = "assets/textures/skybox/bottom.png"
-        }, "png"),
+            .front = "assets/textures/skybox/front.bmp",
+            .back = "assets/textures/skybox/back.bmp",
+            .left = "assets/textures/skybox/left.bmp",
+            .right = "assets/textures/skybox/right.bmp",
+            .top = "assets/textures/skybox/top.bmp",
+            .bottom = "assets/textures/skybox/bottom.bmp"
+        }, "bmp"),
         .objectType = .Texture
     });
 
@@ -155,7 +172,11 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
     try scene.assetManager.put("Texture/Grass", .{
         .loader = graphics.textureAssetLoader,
-        .loaderData = try graphics.TextureAssetLoaderData.init2D(allocator, "assets/textures/grass.bmp", "bmp"),
+        .loaderData = try graphics.TextureAssetLoaderData.init(allocator, .{
+            .path = "assets/textures/grass.png",
+            .format = "png",
+            .tiling = zlm.Vec2.new(5, 5)
+        }),
         .objectType = .Texture,
     });
     var grassMaterial = Material{ .texturePath = "Texture/Grass" };
@@ -167,17 +188,17 @@ fn init(allocator: *Allocator, app: *Application) !void {
     try camera.gameObject.addComponent(controller);
     try scene.add(camera.gameObject);
 
-    //const skybox = try loadSkybox(allocator, camera, scene);
-    //try scene.add(skybox);
+    const skybox = try loadSkybox(allocator, camera, scene);
+    try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, "Mesh/Cube");
-    cube.position = Vec3.new(-10, -0.75, -10);
-    cube.scale = Vec3.new(25, 1, 25);
+    cube.position = Vec3.new(5, -0.75, -10);
+    cube.scale = Vec3.new(50, 1, 50);
     cube.material = grassMaterial;
     try cube.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world, .kinematic=.Kinematic }));
     try scene.add(cube);
 
-    var cube2 = GameObject.createObject(allocator, "Mesh/Cube");
+    cube2 = GameObject.createObject(allocator, "Mesh/Cube");
     cube2.position = Vec3.new(-1.2, 5.75, -3);
     cube2.material.ambient = Vec3.new(0.2, 0.1, 0.1);
     cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
@@ -209,7 +230,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
             // dull on the left, getting shinier to the right
             kart2.material.specular = Vec3.new(1.0 - (j * 0.2), 1.0 - (j * 0.2), 0.2);
             kart2.material.shininess = 110.0 - (j * 20.0);
-
+            //try kart2.addComponent(try physics.Rigidbody.newWithData(allocator,.{.world=&world}));
             try scene.add(kart2);
             j += 1;
         }

@@ -11,6 +11,10 @@ const Vec2 = zlm.Vec2;
 // TODO: more inputs and a more efficient way to do them
 
 pub const Input = struct {
+    mousePosition: Vec2 = Vec2.zero,
+    mouseDelta: Vec2 = Vec2.zero,
+    firstFrame: bool = true,
+
     pub const KEY_A = 0;
     pub const KEY_D = 0;
     pub const KEY_S = 0;
@@ -60,57 +64,28 @@ pub const Input = struct {
         };
 
         pub fn getRawAxes(self: *const Joystick) []const f32 {
-            var count: c_int = 0;
-            const axes = c.glfwGetJoystickAxes(self.id, &count);
-            return axes[0..@intCast(usize, count)];
+            unreachable;
         }
 
         pub fn getRawButtons(self: *const Joystick) []bool {
-            var count: c_int = 0;
-            const cButtons = c.glfwGetJoystickButtons(self.id, &count);
-            var cButtonsBool: [15]bool = undefined;
-
-            var i: usize = 0;
-            while (i < count) {
-                cButtonsBool[i] = cButtons[i] == c.GLFW_PRESS;
-                i += 1;
-            }
-
-            return cButtonsBool[0..@intCast(usize, count)];
+            unreachable;
         }
 
         pub fn getAxes(self: *const Joystick) []const f32 {
-            if (self.isGamepad) {
-                var state: c.GLFWgamepadstate = undefined;
-                _ = c.glfwGetGamepadState(self.id, &state);
-                return state.axes[0..6];
-            } else {
-                return self.getRawAxes();
-            }
+            unreachable;
         }
 
         pub fn isButtonDown(self: *const Joystick, btn: ButtonType) bool {
-            const buttons = self.getButtons();
-            return buttons[@enumToInt(btn)];
+            unreachable;
         }
 
         pub fn getButtons(self: *const Joystick) []bool {
-            if (self.isGamepad) {
-                var state: c.GLFWgamepadstate = undefined;
-                _ = c.glfwGetGamepadState(self.id, &state);
-                var buttons: [15]bool = undefined;
-                for (state.buttons[0..15]) |value, i| {
-                    buttons[i] = value == c.GLFW_PRESS;
-                }
-                return buttons[0..];
-            } else {
-                return self.getRawButtons();
-            }
+            unreachable;
         }
     };
 
     fn init(self: *const Input) void {
-        c.glfwSetInputMode(self.nativeId, c.GLFW_STICKY_MOUSE_BUTTONS, c.GLFW_TRUE);
+
     }
 
     /// Returns true if the key is currently being pressed.
@@ -191,7 +166,7 @@ pub const Window = struct {
             .backing_planes = 1,
             .backing_pixel = 0,
             .save_under = 0,
-            .event_mask = c.ExposureMask | c.PointerMotionMask,
+            .event_mask = c.ExposureMask | c.PointerMotionMask | c.KeyPressMask | c.KeyReleaseMask,
             .do_not_propagate_mask = 0,
             .override_redirect = 0,
             .colormap = colormap,
@@ -246,6 +221,25 @@ pub const Window = struct {
         var i: c_int = 0;
         while (i < pending) {
             _ = c.XNextEvent(self.nativeDisplay, &event);
+            switch (event.type) {
+                c.Expose => {
+                    std.log.info("'Expose' event from X11.", .{});
+                },
+                c.MotionNotify => {
+                    //std.log.info("motion", .{});
+                },
+                c.KeyPress => {
+                    var keyEvent = event.xkey;
+                    const keySym = c.XLookupKeysym(&keyEvent, 0);
+                    const str = c.XKeysymToString(keySym);
+
+                    std.log.info("key press, keycode = {}, keysym = {}, state = {}, str = {}", .{keyEvent.keycode, keySym, keyEvent.state, str});
+                },
+                c.KeyRelease => {
+                    std.log.info("key release", .{});
+                },
+                else => std.log.scoped(.didot).warn("Got X11 event with type {}", .{event.type})
+            }
             i += 1;
         }
 

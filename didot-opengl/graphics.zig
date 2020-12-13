@@ -203,6 +203,7 @@ pub const CubemapSettings = struct {
 
 pub const Texture = struct {
     id: c.GLuint,
+    tiling: zlm.Vec2 = zlm.Vec2.new(1, 1),
 
     pub fn createEmptyCubemap() Texture {
         var id: c.GLuint = undefined;
@@ -211,7 +212,7 @@ pub const Texture = struct {
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
         c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
         c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        return Texture{ .id = id };
+        return Texture { .id = id };
     }
 
     pub fn createEmpty2D() Texture {
@@ -221,7 +222,9 @@ pub const Texture = struct {
         c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
         c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        return Texture{ .id = id };
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_REPEAT);
+        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_REPEAT);
+        return Texture { .id = id };
     }
 
     pub inline fn bind(self: *const Texture) void {
@@ -235,9 +238,10 @@ pub const Texture = struct {
 
 // Image asset loader
 pub const TextureAssetLoaderData = struct {
-    path: ?[]const u8,
-    cubemap: ?CubemapSettings,
+    path: ?[]const u8 = null,
+    cubemap: ?CubemapSettings = null,
     format: []const u8,
+    tiling: zlm.Vec2 = zlm.Vec2.new(1, 1),
 
     /// Memory is caller owned
     pub fn init2D(allocator: *Allocator, path: []const u8, format: []const u8) !usize {
@@ -245,6 +249,13 @@ pub const TextureAssetLoaderData = struct {
         data.path = path;
         data.cubemap = null;
         data.format = format;
+        return @ptrToInt(data);
+    }
+
+    /// Memory is caller owned
+    pub fn init(allocator: *Allocator, original: TextureAssetLoaderData) !usize {
+        var data = try allocator.create(TextureAssetLoaderData);
+        data.* = original;
         return @ptrToInt(data);
     }
 
@@ -284,6 +295,8 @@ inline fn getTextureFormat(format: image.ImageFormat) c.GLuint {
         return c.GL_RGB;
     } else if (format.redMask == 0xFF and format.greenMask == 0xFF00 and format.blueMask == 0xFF0000 and format.bitsSize == 24) {
         return c.GL_BGR;
+    } else if (format.redMask == 0xFF000000 and format.greenMask == 0xFF0000 and format.blueMask == 0xFF00 and format.alphaMask == 0xFF) {
+        return c.GL_RGBA;
     } else {
         unreachable; // TODO convert the source image to RGB
     }
@@ -352,6 +365,7 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
         var img = try textureLoadImage(allocator, path, data.format);
         c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB, @intCast(c_int, img.width), @intCast(c_int, img.height),
             0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
+        texture.tiling = data.tiling;
         img.deinit();
         var t = try allocator.create(Texture);
         t.* = texture;
@@ -393,7 +407,7 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
 
     var assets = &scene.assetManager;
     if (scene.camera) |camera| {
-        var projMatrix = zlm.Mat4.createPerspective(camera.fov, vp.z / vp.w, 0.01, 100);
+        var projMatrix = zlm.Mat4.createPerspective(camera.fov, vp.z / vp.w, 0.1, 1000);
         camera.shader.setUniformMat4("projMatrix", projMatrix);
 
         // create the direction vector to be used with the view matrix.
@@ -424,7 +438,7 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
             camera.shader.setUniformBool("useLight", false);
         }
         camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
-        try renderObject(scene.gameObject, assets, camera);
+        try renderObject(&scene.gameObject, assets, camera);
     }
 }
 
@@ -449,7 +463,7 @@ fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !vo
     }
 }
 
-fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) anyerror!void {
+fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera) anyerror!void {
     if (gameObject.objectType) |custom| {
         if (std.mem.eql(u8, custom, "skybox")) {
             return; // don't render skybox here
@@ -463,6 +477,8 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
         if (material.texturePath) |path| {
             const texture = @intToPtr(*Texture, (try assets.getExpected(path, .Texture)).?);
             texture.bind();
+            camera.shader.setUniformFloat("xTiling", if (texture.tiling.x == 0) 1 else gameObject.scale.x / texture.tiling.x);
+            camera.shader.setUniformFloat("yTiling", if (texture.tiling.y == 0) 1 else gameObject.scale.z / texture.tiling.y);
             camera.shader.setUniformBool("useTex", true);
         } else {
             camera.shader.setUniformBool("useTex", false);
@@ -470,19 +486,13 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
         camera.shader.setUniformVec3("material.ambient", material.ambient);
         camera.shader.setUniformVec3("material.diffuse", material.diffuse);
         camera.shader.setUniformVec3("material.specular", material.specular);
-        var s: f32 = material.shininess;
-        if (s <= 1.0) {
-            s = 1.0;
-        }
-        if (s >= 128.0) {
-            s = 128.0;
-        }
+        var s: f32 = std.math.clamp(material.shininess, 1.0, 128.0);
         camera.shader.setUniformFloat("material.shininess", s);
         const rotMatrix = 
             zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), gameObject.rotation.x).mul(
             zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), gameObject.rotation.y).mul(
             zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), gameObject.rotation.z)));
-        const matrix = zlm.Mat4.createScale(gameObject.scale).mul(rotMatrix.mul(zlm.Mat4.createTranslation(gameObject.position)));
+        const matrix = rotMatrix.mul(zlm.Mat4.createScale(gameObject.scale).mul(zlm.Mat4.createTranslation(gameObject.position)));
         camera.shader.setUniformMat4("modelMatrix", matrix);
 
         if (mesh.hasEbo) {
@@ -492,10 +502,12 @@ fn renderObject(gameObject: GameObject, assets: *AssetManager, camera: *Camera) 
         }
     }
 
+    const held = gameObject.treeLock.acquire();
     var childs = gameObject.childrens.items;
-    for (childs) |child| {
+    for (childs) |*child| {
         try renderObject(child, assets, camera);
     }
+    held.release();
 }
 
 usingnamespace @import("didot-window");

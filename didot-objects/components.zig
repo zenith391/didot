@@ -6,12 +6,13 @@ pub const Component = struct {
     options: ComponentOptions,
     data: usize,
     allocator: *Allocator,
+    gameObject: *GameObject = undefined,
     // Uses a pointer in order to save memory.
     name: *const []const u8,
 
-    pub fn update(self: *Component, allocator: *Allocator, gameObject: *GameObject, delta: f32) anyerror!void {
+    pub fn update(self: *Component, allocator: *Allocator, delta: f32) anyerror!void {
         if (self.options.updateFn) |func| {
-            try func(allocator, self, gameObject, delta);
+            try func(allocator, self, delta);
         }
     }
 
@@ -36,7 +37,7 @@ pub const Component = struct {
 
 pub const ComponentOptions = struct {
     /// Functions called regularly depending on the updateTarget value of the Application.
-    updateFn: ?fn(allocator: *Allocator, component: *Component, gameObject: *GameObject, delta: f32) anyerror!void = null
+    updateFn: ?fn(allocator: *Allocator, component: *Component, delta: f32) anyerror!void = null
 };
 
 pub fn ComponentType(comptime name: @Type(.EnumLiteral), comptime Data: anytype, options: ComponentOptions) type {

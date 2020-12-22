@@ -109,7 +109,7 @@ pub const Application = struct {
     }
 
     /// Helper method to call both init() and loop().
-    pub fn start(self: *Application, allocator: *Allocator, scene: *Scene) !void {
+    pub fn run(self: *Application, allocator: *Allocator, scene: *Scene) !void {
         try self.init(allocator, scene);
         try self.loop();
     }

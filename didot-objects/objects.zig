@@ -196,6 +196,7 @@ pub const GameObject = struct {
     material: Material = Material.default,
     /// Lock used when accesing the game object's tree
     treeLock: std.Mutex = .{},
+    parent: ?*GameObject = null,
 
     /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
     pub fn createEmpty(allocator: *Allocator) GameObject {
@@ -230,7 +231,8 @@ pub const GameObject = struct {
 
     pub fn update(self: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
         for (self.components.items) |*component| {
-            try component.update(allocator, self, delta);
+            component.gameObject = self;
+            try component.update(allocator, delta);
         }
 
         for (self.childrens.items) |*child| {
@@ -238,7 +240,7 @@ pub const GameObject = struct {
         }
     }
 
-    pub fn findChild(self: *const GameObject, name: []const u8) ?*GameObject {
+    pub fn findChild(self: *GameObject, name: []const u8) ?*GameObject {
         const held = self.treeLock.acquire();
         defer held.release();
         for (self.childrens.items) |*child| {
@@ -297,7 +299,10 @@ pub const GameObject = struct {
     pub fn add(self: *GameObject, go: GameObject) !void {
         const held = self.treeLock.acquire();
         defer held.release();
-        try self.childrens.append(go);
+        
+        var gameObject = go;
+        gameObject.parent = self;
+        try self.childrens.append(gameObject);
     }
 
     pub fn addComponent(self: *GameObject, cp: Component) !void {
@@ -319,10 +324,12 @@ pub const GameObject = struct {
     }
 
     /// De-init the game object and its children (recursive deinit)
-    pub fn deinitAll(self: *const GameObject) void {
+    pub fn deinitAll(self: *GameObject) void {
+        const held = self.treeLock.acquire();
         for (self.childrens.items) |*child| {
             child.deinitAll();
         }
+        held.release();
         self.deinit();
     }
 };

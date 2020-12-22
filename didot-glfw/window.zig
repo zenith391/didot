@@ -24,6 +24,7 @@ pub const Input = struct {
     pub const KEY_W = c.GLFW_KEY_W;
 
     pub const KEY_ESCAPE = c.GLFW_KEY_ESCAPE;
+    pub const KEY_SPACE = c.GLFW_KEY_SPACE;
 
     pub const KEY_UP = c.GLFW_KEY_UP;
     pub const KEY_LEFT = c.GLFW_KEY_LEFT;

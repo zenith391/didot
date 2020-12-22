@@ -256,5 +256,5 @@ pub fn main() !void {
         .initFn = init,
         .updateFn = update,
     };
-    try app.start(allocator, scene);
+    try app.run(allocator, scene);
 }

@@ -48,11 +48,16 @@ pub const World = struct {
         const b2 = dGeomGetBody(o2);
         const self = @ptrCast(*World, @alignCast(@alignOf(World), data.?));
 
+        const b1data = @ptrCast(*RigidbodyData, @alignCast(@alignOf(RigidbodyData), dBodyGetData(b1).?));
+        const b2data = @ptrCast(*RigidbodyData, @alignCast(@alignOf(RigidbodyData), dBodyGetData(b2).?));
+
+        const bounce: f32 = std.math.max(b1data.material.bounciness, b2data.material.bounciness);
+
         var contact: dContact = undefined;
         contact.surface.mode = dContactBounce;
         contact.surface.mu = std.math.inf(dReal);
-        contact.surface.bounce = 0.2;
-        contact.surface.bounce_vel = 10;
+        contact.surface.bounce = bounce;
+        contact.surface.bounce_vel = 1;
         contact.surface.soft_cfm = 0.1;
         const numc = dCollide(o1, o2, 1, &contact.geom, @sizeOf(dContact));
         if (numc != 0) {
@@ -90,6 +95,10 @@ pub const KinematicState = enum {
     Kinematic
 };
 
+pub const PhysicsMaterial = struct {
+    bounciness: f32 = 0.0
+};
+
 pub const RigidbodyData = struct {
     inited: bool = false,
     world: *World,
@@ -97,9 +106,16 @@ pub const RigidbodyData = struct {
     geom: dGeomID = undefined,
     mass: dMass = undefined,
     kinematic: KinematicState = .Dynamic,
+    gameObject: *GameObject = undefined,
+    material: PhysicsMaterial = .{},
 
     pub fn addForce(self: *RigidbodyData, force: zlm.Vec3) void {
         dBodyAddForce(self.body, force.x, force.y, force.z);
+    }
+
+    pub fn setPosition(self: *RigidbodyData, position: zlm.Vec3) void {
+        dBodySetPosition(self.body, position.x, position.y, position.z);
+        self.gameObject.position = position;
     }
 };
 pub const Rigidbody = objects.ComponentType(.Rigidbody, RigidbodyData, .{ .updateFn = rigidbodyUpdate }) {};
@@ -120,15 +136,16 @@ fn quatToEuler(q: [*]const dReal) zlm.Vec3 {
     return angles;
 }
 
-fn rigidbodyUpdate(allocator: *Allocator, component: *Component, gameObject: *GameObject, delta: f32) !void {
+fn rigidbodyUpdate(allocator: *Allocator, component: *Component, delta: f32) !void {
     const data = component.getData(RigidbodyData);
+    const gameObject = component.gameObject;
     if (!data.inited) {
-        std.debug.warn("Init rigidbody!\n", .{});
         data.body = dBodyCreate(data.world.id);
         data.geom = dCreateBox(data.world.space, 1.0, 1.0, 1.0);
+        data.gameObject = gameObject;
         dMassSetBox(&data.mass, 1.0, 1.0, 1.0, 1.0);
         dGeomSetBody(data.geom, data.body);
-        dBodySetPosition(data.body, gameObject.position.x, gameObject.position.y, gameObject.position.z);
+        data.setPosition(gameObject.position);
         dBodySetData(data.body, data);
         dBodySetMass(data.body, &data.mass);
         dBodySetDamping(data.body, 0.001, 0.001);

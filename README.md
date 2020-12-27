@@ -36,16 +36,12 @@ Cube:
 ```zig
 const std = @import("std");
 const zlm = @import("zlm");
-const graphics = @import("didot-graphics");
-const objects = @import("didot-objects");
-const Application = @import("didot-app").Application;
+usingnamespace @import("didot-graphics");
+usingnamespace @import("didot-objects");
+usingnamespace @import("didot-app");
 
 const Vec3 = zlm.Vec3;
 const Allocator = std.mem.Allocator;
-const ShaderProgram = graphics.ShaderProgram;
-const GameObject = objects.GameObject;
-const Scene = objects.Scene;
-const Camera = objects.Camera;
 
 fn init(allocator: *Allocator, app: *Application) !void {
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
@@ -64,7 +60,7 @@ pub fn main() !void {
     var gp = std.heap.GeneralPurposeAllocator(.{}) {};
     const allocator = &gp.allocator;
 
-    var scene = try Scene.create(allocator);
+    var scene = try Scene.create(allocator, null);
     var app = Application {
         .title = "Test Cube",
         .initFn = init
@@ -74,18 +70,15 @@ pub fn main() !void {
 ```
 That is where you can see it's not 100% true that zero porting is necessary, if you use some other graphics backend that doesn't accept GLSL, you'll have to rewrite the shaders.
 
-It's done this way because making a universal shader language is hard and would also bloat the engine.
-
 And to make that into a textured cube, only a few lines are necessary:
 ```zig
-try scene.assetManager.put("Texture/Grass", .{
-    .loader = graphics.textureAssetLoader,
-    .loaderData = try graphics.TextureAssetLoaderData.init2D(allocator, "assets/textures/grass.png", "png"),
-    .objectType = .Texture
-});
+try scene.assetManager.put("Texture/Grass", try TextureAsset.init2D(allocator, "assets/textures/grass.png", "png"));
 var material = Material { .texturePath = "Texture/Grass" };
 cube.material = material;
 ```
+First line loads `assets/textures/grass.png` to `Texture/Grass`.  
+Second line creates a Material with the `Texture/Grass` texture.  
+Third line links the cube to the newly created Material.
 
 You can also look at the [kart and cubes example](https://github.com/zenith391/didot/blob/master/examples/kart-and-cubes/example-scene.zig) to see how to make camera movement or load models from OBJ files or even load scenes from JSON files.
 

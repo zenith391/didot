@@ -32,7 +32,7 @@ pub fn createHeightmap(allocator: *Allocator, heightmap: [][]const f32) !Mesh {
 
     var vertices = try allocator.alloc(f32, width*height*(4*5)); // width*height*vertices*vertex size
     defer allocator.free(vertices);
-    var elements = try allocator.alloc(c.GLuint, heightmap.len*height*6);
+    var elements = try allocator.alloc(graphics.MeshElementType, heightmap.len*height*6);
     defer allocator.free(elements);
 
     for (heightmap) |column, column_index| {
@@ -53,7 +53,7 @@ pub fn createHeightmap(allocator: *Allocator, heightmap: [][]const f32) !Mesh {
             vertices[pos+10] = x+sqLen; vertices[pos+11] = brY; vertices[pos+12] = z-sqLen; vertices[pos+13] = 1.0; vertices[pos+14] = 1.0; // bottom-right
             vertices[pos+15] = x+sqLen; vertices[pos+16] = trY; vertices[pos+17] = z+sqLen; vertices[pos+18] = 1.0; vertices[pos+19] = 0.0; // top-right
 
-            var vecPos: c.GLuint = @intCast(c.GLuint, (column_index*height+row_index)*4);
+            var vecPos: graphics.MeshElementType = @intCast(graphics.MeshElementType, (column_index*height+row_index)*4);
             var elemPos: usize = (column_index*height+row_index)*6;
             elements[elemPos] = vecPos;
             elements[elemPos+1] = vecPos+1;
@@ -236,6 +236,7 @@ pub const GameObject = struct {
         }
 
         for (self.childrens.items) |*child| {
+            child.parent = self;
             try child.update(allocator, delta); // TODO: correctly handle errors
         }
     }
@@ -460,13 +461,13 @@ pub const Scene = struct {
     }
 
     pub fn deinit(self: *Scene) void {
-        self.gameObject.deinit();
         self.assetManager.deinit();
+        self.gameObject.deinit(); // last as it also frees the Scene object
     }
 
     pub fn deinitAll(self: *Scene) void {
-        self.gameObject.deinitAll();
         self.assetManager.deinit();
+        self.gameObject.deinitAll(); // last as it also frees the Scene object
     }
 };
 
@@ -481,8 +482,7 @@ test "empty gameobject" {
 }
 
 test "empty scene" {
-    var alloc = std.heap.page_allocator;
-    var scene = try Scene.create(alloc);
+    var scene = try Scene.create(std.testing.allocator, null);
     expect(scene.gameObject.objectType != null);
     expect(std.mem.eql(u8, scene.gameObject.objectType.?, "scene"));
     scene.deinit();

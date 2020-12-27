@@ -237,36 +237,48 @@ pub const Texture = struct {
 };
 
 // Image asset loader
-pub const TextureAssetLoaderData = struct {
-    path: ?[]const u8 = null,
-    cubemap: ?CubemapSettings = null,
-    format: []const u8,
-    tiling: zlm.Vec2 = zlm.Vec2.new(1, 1),
-
-    /// Memory is caller owned
-    pub fn init2D(allocator: *Allocator, path: []const u8, format: []const u8) !usize {
+pub const TextureAsset = struct {
+    pub fn init2D(allocator: *Allocator, path: []const u8, format: []const u8) !Asset {
         var data = try allocator.create(TextureAssetLoaderData);
         data.path = path;
         data.cubemap = null;
         data.format = format;
-        return @ptrToInt(data);
+        return Asset {
+            .loader = textureAssetLoader,
+            .loaderData = @ptrToInt(data),
+            .objectType = .Texture
+        };
     }
 
     /// Memory is caller owned
-    pub fn init(allocator: *Allocator, original: TextureAssetLoaderData) !usize {
+    pub fn init(allocator: *Allocator, original: TextureAssetLoaderData) !Asset {
         var data = try allocator.create(TextureAssetLoaderData);
         data.* = original;
-        return @ptrToInt(data);
+        return Asset {
+            .loader = textureAssetLoader,
+            .loaderData = @ptrToInt(data),
+            .objectType = .Texture
+        };
     }
 
     /// Memory is caller owned
-    pub fn initCubemap(allocator: *Allocator, cb: CubemapSettings, format: []const u8) !usize {
+    pub fn initCubemap(allocator: *Allocator, cb: CubemapSettings, format: []const u8) !Asset {
         var data = try allocator.create(TextureAssetLoaderData);
         data.path = null;
         data.cubemap = cb;
         data.format = format;
-        return @ptrToInt(data);
+        return Asset {
+            .loader = textureAssetLoader,
+            .loaderData = @ptrToInt(data),
+            .objectType = .Texture
+        };
     }
+};
+pub const TextureAssetLoaderData = struct {
+    path: ?[]const u8 = null,
+    cubemap: ?CubemapSettings = null,
+    format: []const u8,
+    tiling: zlm.Vec2 = zlm.Vec2.new(1, 1)
 };
 
 pub const TextureAssetLoaderError = error{InvalidFormat};
@@ -285,7 +297,6 @@ fn textureLoadImage(allocator: *Allocator, path: []const u8, format: []const u8)
 const CubemapThreadStruct = struct {
     allocator: *Allocator, path: []const u8, format: []const u8, image: Image
 };
-
 fn cubemapThread(data: *CubemapThreadStruct) !void {
     data.image = try textureLoadImage(data.allocator, data.path, data.format);
 }
@@ -380,6 +391,7 @@ const Scene = objects.Scene;
 const GameObject = objects.GameObject;
 const Camera = objects.Camera;
 const AssetManager = objects.AssetManager;
+const Asset = objects.Asset;
 
 /// Set this function to replace normal pre-render behaviour (GL state, clear, etc.), it happens after viewport
 pub var preRender: ?fn() void = null;
@@ -413,8 +425,16 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
         // create the direction vector to be used with the view matrix.
         const yaw = camera.gameObject.rotation.x;
         const pitch = camera.gameObject.rotation.y;
-        const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch));
+        const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch)).normalize();
         const viewMatrix = zlm.Mat4.createLookAt(camera.gameObject.position, camera.gameObject.position.add(direction), zlm.Vec3.new(0.0, 1.0, 0.0));
+
+        // const rotMatrix = zlm.Mat4.identity
+        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), camera.gameObject.rotation.y))
+        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), -camera.gameObject.rotation.x))
+        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), 0));
+        //const rotMatrix = zlm.Mat4.createAngleAxis(direction, std.math.pi / 2.0);
+        //const viewMatrix = rotMatrix;
+
         if (scene.skybox) |skybox| {
             if (camera.skyboxShader) |skyboxShader| {
                 skyboxShader.bind();
@@ -438,7 +458,7 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
             camera.shader.setUniformBool("useLight", false);
         }
         camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
-        try renderObject(&scene.gameObject, assets, camera);
+        try renderObject(&scene.gameObject, assets, camera, zlm.Mat4.identity);
     }
 }
 
@@ -463,16 +483,26 @@ fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !vo
     }
 }
 
-fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera) anyerror!void {
+fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera, parentMatrix: zlm.Mat4) anyerror!void {
     if (gameObject.objectType) |custom| {
         if (std.mem.eql(u8, custom, "skybox")) {
             return; // don't render skybox here
         }
     }
+    const rotMatrix = 
+        zlm.Mat4.createAngleAxis_(zlm.Vec3.new(0, 0, 1), gameObject.rotation.z).mul(
+        zlm.Mat4.createAngleAxis_(zlm.Vec3.new(0, 1, 0), gameObject.rotation.y).mul(
+        zlm.Mat4.createAngleAxis_(zlm.Vec3.new(1, 0, 0), gameObject.rotation.x)));
+    const matrix = 
+        zlm.Mat4.identity
+        .mul(zlm.Mat4.createScale(gameObject.scale))
+        .mul(rotMatrix)
+        .mul(zlm.Mat4.createTranslation(gameObject.position))
+        .mul(parentMatrix);
     if (gameObject.meshPath) |meshPath| {
-        var mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
+        const mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
         c.glBindVertexArray(mesh.vao);
-        var material = &gameObject.material;
+        const material = gameObject.material;
 
         if (material.texturePath) |path| {
             const texture = @intToPtr(*Texture, (try assets.getExpected(path, .Texture)).?);
@@ -488,11 +518,6 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera)
         camera.shader.setUniformVec3("material.specular", material.specular);
         var s: f32 = std.math.clamp(material.shininess, 1.0, 128.0);
         camera.shader.setUniformFloat("material.shininess", s);
-        const rotMatrix = 
-            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), gameObject.rotation.x).mul(
-            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), gameObject.rotation.y).mul(
-            zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), gameObject.rotation.z)));
-        const matrix = zlm.Mat4.createScale(gameObject.scale).mul(rotMatrix.mul(zlm.Mat4.createTranslation(gameObject.position)));
         camera.shader.setUniformMat4("modelMatrix", matrix);
 
         if (mesh.hasEbo) {
@@ -505,7 +530,7 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera)
     const held = gameObject.treeLock.acquire();
     var childs = gameObject.childrens.items;
     for (childs) |*child| {
-        try renderObject(child, assets, camera);
+        try renderObject(child, assets, camera, matrix);
     }
     held.release();
 }

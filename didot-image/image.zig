@@ -10,11 +10,21 @@ pub const ColorChannel = enum {
     Alpha
 };
 
+//// A pixel format. Note that it only represents the sRGB color space.
 pub const ImageFormat = struct {
+    /// Bit mask for the red color channel.
+    /// Example: 0xFF000000 for RGBA.
     redMask: u32,
+    /// Bit mask for the green color channel.
+    /// Example: 0x00FF0000 for RGBA.
     greenMask: u32,
+    /// Bit mask for the blue color channel.
+    /// Example: 0x0000FF00 for RGBA.
     blueMask: u32,
+    /// Bit mask for the alpha transparency channel.
+    /// Example: 0x000000FF for RGBA.
     alphaMask: u32 = 0,
+    /// The size, in bits, of one pixel.
     bitsSize: u8,
 
     /// 8-bit red, green and blue samples in that order.
@@ -26,10 +36,12 @@ pub const ImageFormat = struct {
     /// 8-bit gray sample.
     pub const GRAY8 = ImageFormat {.redMask=0xFF, .greenMask=0xFF, .blueMask=0xFF, .bitsSize=8};
 
+    /// Get the bit size of the image format.
     pub fn getBitSize(self: *ImageFormat) u8 {
         return self.bitsSize;
     }
 
+    /// Get the bit mask of the specified color channel.
     pub fn getBitMask(self: *ImageFormat, channel: ColorChannel) u32 {
         return switch (channel) {
             .Red => self.redMask, .Green => self.greenMask,
@@ -37,9 +49,16 @@ pub const ImageFormat = struct {
         };
     }
 
-    pub const ShiftError = error { NullMask };
+    pub const ShiftError = error {
+        /// If the mask of the color channel is 0,
+        /// no shift can be found and this error is returned.
+        NullMask
+    };
 
-    pub fn getShift(self: *ImageFormat, channel: ColorChannel) ShiftError!u32 {
+    /// Returns how many bits must be shifted to the right in order to get the specified color channel value.
+    /// Example: for ColorChannel.Red, this functions returns 24 if the image format is RGBA as you must
+    /// shift a pixel 24 bits to the right to get the red color.
+    pub fn getShift(self: *ImageFormat, channel: ColorChannel) ShiftError!u5 {
         // Example:
         //   The mask of the red color is 0b111000
         //   We shift right one time and get 0b011100, last bit is 0 so continue
@@ -50,14 +69,17 @@ pub const ImageFormat = struct {
         const mask = self.getBitMask(channel);
         var shift: u8 = 0;
         while (shift < self.bitsSize) : (shift += 1) {
-            const num = mask >> shift;
+            const num = mask >> @intCast(u5, shift);
             if ((num & 1) == 1) { // if we hit the first 1 bit of the mask
-                return shift;
+                return @intCast(u5, shift);
             }
         }
         return ShiftError.NullMask;
     }
 
+    /// Using this image format, get the value corresponding to the color channel from a pixel.
+    /// Example: Assuming RGBA image format and a pixel with value 0x11223344, if we use this function
+    /// with the Red color channel, it will return 0x11.
     pub fn getValue(self: *ImageFormat, channel: ColorChannel, value: u32) !u32 {
         const mask = self.getBitMask(channel);
         const shift = try self.getShift(channel);
@@ -69,8 +91,11 @@ pub const Image = struct {
     allocator: ?*Allocator = null,
     /// The image data, in linear 8-bit RGB format.
     data: []u8,
+    /// The width of the image in pixels.
     width: usize,
+    /// The height of the image in pixels.
     height: usize,
+    /// The pixel format of the image.
     format: ImageFormat,
 
     pub fn deinit(self: *const Image) void {
@@ -83,4 +108,6 @@ pub const Image = struct {
 comptime {
     @import("std").testing.refAllDecls(bmp);
     @import("std").testing.refAllDecls(png);
+    @import("std").testing.refAllDecls(Image);
+    @import("std").testing.refAllDecls(ImageFormat);
 }

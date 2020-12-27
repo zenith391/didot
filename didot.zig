@@ -8,6 +8,7 @@ pub const app = @import("didot-app/app.zig");
 pub const image = @import("didot-image/image.zig");
 pub const models = @import("didot-models/models.zig");
 pub const objects = @import("didot-objects/objects.zig");
+pub const physics = @import("didot-ode/physics.zig");
 
 comptime {
     const testing = @import("std").testing;

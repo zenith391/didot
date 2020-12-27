@@ -14,7 +14,7 @@ pub const Asset = struct {
     /// Pointer to object
     objectPtr: usize = 0,
     objectAllocator: ?*Allocator = null,
-    /// If the function is null, the asset is already loaded.
+    /// If the function is null, the asset is already loaded and unloadable is false.
     /// Otherwise this method must called, objectPtr must be set to the function result
     /// and must have been allocated on the given Allocator (or duped if not).
     /// That internal behaviour is handled with the get() function
@@ -76,17 +76,24 @@ pub const AssetManager = struct {
     allocator: *Allocator,
 
     pub fn init(allocator: *Allocator) AssetManager {
-        var map = AssetMap.init(allocator);
         return AssetManager {
-            .assets = map,
+            .assets = AssetMap.init(allocator),
             .allocator = allocator
         };
     }
 
-    pub fn getAsset(self: *AssetManager, key: []const u8) ?Asset {
-        return self.assets.get(key);
+    pub fn getAsset(self: *AssetManager, key: []const u8) anyerror!?Asset {
+        if (self.assets.get(key)) |*asset| {
+            const value = try asset.get(self.allocator);
+            try self.assets.put(key, asset.*);
+            return asset.*;
+        } else {
+            return null;
+        }
     }
 
+    /// Checks whether an asset's type match the 'expected argument'.
+    /// For performance reasons, isType always return true in ReleaseSmall and ReleaseFast modes.
     pub inline fn isType(self: *AssetManager, key: []const u8, expected: AssetType) bool {
         if (runtime_safety) {
             if (self.assets.get(key)) |asset| {
@@ -99,19 +106,22 @@ pub const AssetManager = struct {
         }
     }
 
+    /// Get the asset and asserts its type match the 'expected' argument.
+    /// For performance reasons, getExpected only does the check on ReleaseSafe and Debug modes.
     pub fn getExpected(self: *AssetManager, key: []const u8, expected: AssetType) anyerror!?usize {
         if (self.assets.get(key)) |*asset| {
-            const value = try asset.get(self.allocator);
-            try self.assets.put(key, asset.*);
             if (runtime_safety and asset.objectType != expected) {
                 return AssetError.UnexpectedType;
             }
+            const value = try asset.get(self.allocator);
+            try self.assets.put(key, asset.*);
             return value;
         } else {
             return null;
         }
     }
 
+    /// Retrieve an asset from the asset manager, loading it if it wasn't already.
     pub fn get(self: *AssetManager, key: []const u8) anyerror!?usize {
         if (self.assets.get(key)) |*asset| {
             const value = try asset.get(self.allocator);
@@ -122,14 +132,17 @@ pub const AssetManager = struct {
         }
     }
 
+    /// Whether the asset manager has an asset with the following key.
     pub fn has(self: *AssetManager, key: []const u8) bool {
         return self.assets.get(key) != null;
     }
 
+    /// Put the following asset with the following key in the asset manager.
     pub fn put(self: *AssetManager, key: []const u8, asset: Asset) !void {
         try self.assets.put(key, asset);
     }
 
+    /// De-init all the assets in this asset manager.
     pub fn deinit(self: *AssetManager) void {
         var iterator = self.assets.iterator();
         while (iterator.next()) |item| {
@@ -137,4 +150,9 @@ pub const AssetManager = struct {
         }
         self.assets.deinit();
     }
-}; 
+};
+
+comptime {
+    std.testing.refAllDecls(AssetManager);
+    std.testing.refAllDecls(Asset);
+}

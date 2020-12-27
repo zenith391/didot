@@ -15,9 +15,6 @@ pub const EngineConfig = struct {
     usePhysics: bool = false
 };
 
-/// hacky workaround some compiler bug
-var graphics_deps: [3]Pkg = undefined;
-
 pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void {
     var allocator = step.builder.allocator;
     const prefix = config.prefix;
@@ -56,6 +53,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         .path = windowPath,
         .dependencies = &[_]Pkg{zlm}
     };
+    var graphics_deps = try allocator.alloc(Pkg, 3);
     graphics_deps[0] = window;
     graphics_deps[1] = image;
     graphics_deps[2] = zlm;
@@ -63,7 +61,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     const graphics = Pkg {
         .name = "didot-graphics",
         .path = prefix ++ "didot-opengl/graphics.zig",
-        .dependencies = &graphics_deps
+        .dependencies = graphics_deps
     };
     step.linkSystemLibrary("GL");
     
@@ -108,11 +106,11 @@ pub fn build(b: *Builder) !void {
     var mode = b.standardReleaseOptions();
     const stripExample = b.option(bool, "strip-example", "Attempt to minify examples by stripping them and changing release mode.") orelse false;
 
-    const exe = b.addExecutable("didot-example-scene", "examples/kart-and-cubes/example-scene.zig");
+    const exe = b.addExecutable("didot-example-scene", "examples/test-portal/example-scene.zig");
     exe.setTarget(target);
     exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
     try addEngineToExe(exe, .{
-        //.windowModule = "didot-x11"
+        //.windowModule = "didot-x11",
         .autoWindow = false,
         .usePhysics = true
     });
@@ -120,13 +118,13 @@ pub fn build(b: *Builder) !void {
     exe.strip = stripExample;
     exe.install();
 
-    if (@hasField(LibExeObjStep, "emit_docs") and false) {
+    if (@hasField(LibExeObjStep, "emit_docs")) {
         const otest = b.addTest("didot.zig");
         otest.emit_docs = true;
         //otest.emit_bin = false;
-        otest.setOutputDir("docs");
         try addEngineToExe(otest, .{
-            .autoWindow = false
+            .autoWindow = false,
+            .usePhysics = true
         });
 
         const test_step = b.step("doc", "Test and document Didot");

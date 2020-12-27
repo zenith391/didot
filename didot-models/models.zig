@@ -33,8 +33,6 @@ pub fn meshAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
     }
 }
 
-test "" {
-    comptime {
-        @import("std").meta.refAllDecls(obj);
-    }
+comptime {
+    @import("std").testing.refAllDecls(obj);
 }

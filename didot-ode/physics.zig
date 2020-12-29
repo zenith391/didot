@@ -138,14 +138,14 @@ fn quatToEuler(q: [*]const c.dReal) zlm.Vec3 {
     var angles = zlm.Vec3.new(0, 0, 0);
     const sinr_cosp = 2.0 * (q[0] * q[1] + q[2] * q[3]);
     const cosr_cosp = 1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2]);
-    angles.x = std.math.atan2(c.dReal, sinr_cosp, cosr_cosp);
+    angles.z = std.math.atan2(c.dReal, sinr_cosp, cosr_cosp);
 
     const sinp = 2.0 * (q[0] * q[2] - q[3] * q[1]);
     angles.y = if (std.math.fabs(sinp) >= 1) std.math.copysign(c.dReal, std.math.pi / 2.0, sinp) else std.math.asin(sinp);
 
     const siny_cosp = 2.0 * (q[0] * q[3] + q[1] * q[2]);
     const cosy_cosp = 1.0 - 2.0 * (q[2] * q[2] + q[3] * q[3]);
-    angles.z = std.math.atan2(c.dReal, siny_cosp, cosy_cosp);
+    angles.x = std.math.atan2(c.dReal, siny_cosp, cosy_cosp);
 
     return angles;
 }

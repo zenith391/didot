@@ -63,7 +63,7 @@ fn playerInput(allocator: *Allocator, component: *Component, delta: f32) !void {
         rb.setPosition(gameObject.position.add(left.scale(-speed)));
     }
     if (input.isKeyDown(Input.KEY_SPACE)) {
-        rb.addForce(Vec3.new(0, 40, 0));
+        rb.addForce(Vec3.new(0, 400*speed, 0));
     }
 
     if (input.isKeyDown(Input.KEY_UP)) {
@@ -73,14 +73,12 @@ fn playerInput(allocator: *Allocator, component: *Component, delta: f32) !void {
         cube2.material.ambient = color.mul(Vec3.new(0.1, 0.1, 0.1));
         cube2.material.diffuse = color.mul(Vec3.new(0.9, 0.9, 0.9));
         try cube2.addComponent(try physics.Rigidbody.newWithData(allocator, .{
-            .world = &world,
-            .material = .{
-                .bounciness = 0.6
-            }
+           .world = &world,
+           .material = .{
+               .bounciness = 0.6
+           }
         }));
-        std.log.info("add", .{});
         const parent = gameObject.parent.?;
-        std.log.info("parent = {x}", .{@ptrToInt(parent)});
         try parent.add(cube2);
     }
 }
@@ -116,10 +114,10 @@ fn init(allocator: *Allocator, app: *Application) !void {
 
     var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
     const scene = app.scene;
+    const asset = &scene.assetManager;
 
-    try scene.assetManager.put("Texture/Concrete", try TextureAsset.init(allocator, .{
-        .path = "assets/textures/grass.bmp",
-        .format = "bmp",
+    try asset.put("Texture/Concrete", try TextureAsset.init(allocator, .{
+        .path = "assets/textures/grass.png", .format = "png",
         .tiling = zlm.Vec2.new(2, 2)
     }));
     var concreteMaterial = Material{ .texturePath = "Texture/Concrete" };
@@ -143,8 +141,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     try camera.gameObject.addComponent(controller);
     try scene.add(camera.gameObject);
 
-    //const skybox = try loadSkybox(allocator, camera, scene);
-    //try scene.add(skybox);
+    const skybox = try loadSkybox(allocator, camera, scene);
+    try scene.add(skybox);
 
     var cube = GameObject.createObject(allocator, "Mesh/Cube");
     cube.position = Vec3.new(5, -0.75, -10);

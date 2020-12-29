@@ -65,7 +65,7 @@ pub fn main() !void {
         .title = "Test Cube",
         .initFn = init
     };
-    try app.start(allocator, scene);
+    try app.run(allocator, scene);
 }
 ```
 That is where you can see it's not 100% true that zero porting is necessary, if you use some other graphics backend that doesn't accept GLSL, you'll have to rewrite the shaders.

@@ -7,6 +7,13 @@ const Allocator = std.mem.Allocator;
 const Window = graphics.Window;
 const Scene = objects.Scene;
 
+const HIGH_PRECISION_CLOCK = true;
+const ClockType = if (HIGH_PRECISION_CLOCK) i128 else i64;
+const clockMeasure = if (HIGH_PRECISION_CLOCK) std.time.nanoTimestamp else std.time.milliTimestamp;
+const time_per_s = if (HIGH_PRECISION_CLOCK) std.time.ns_per_s else std.time.ms_per_s;
+const ns_per_time = if (HIGH_PRECISION_CLOCK) 1 else std.time.ns_per_ms;
+const clockUnit = if (HIGH_PRECISION_CLOCK) "ns" else "ms";
+
 /// Helper class for using Didot.
 pub const Application = struct {
     /// How many time per second updates should be called, defaults to 60 updates/s.
@@ -23,7 +30,7 @@ pub const Application = struct {
     /// This function, depending on settings, might not execute on the main thread.
     updateFn: ?fn(tempAllocator: *Allocator, app: *Application, delta: f32) anyerror!void = null,
     closing: bool = false,
-    lastUpdateTime: i64 = 0,
+    lastUpdateTime: ClockType = 0,
 
     /// Initialize the application using the given allocator and scene.
     /// This creates a window, init primitives and call the init function if set.
@@ -33,7 +40,7 @@ pub const Application = struct {
         self.scene = scene;
         self.window = window;
         self.allocator = allocator;
-        self.lastUpdateTime = std.time.milliTimestamp();
+        self.lastUpdateTime = clockMeasure();
         objects.initPrimitives();
         
         try scene.assetManager.put("Mesh/Cube", .{
@@ -63,18 +70,23 @@ pub const Application = struct {
         var arena = std.heap.ArenaAllocator.init(self.allocator);
         const allocator = &arena.allocator;
 
-        const s_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * 1000;
-        const time = std.time.milliTimestamp();
-        const delta = @floatCast(f32, @intToFloat(f64, time-self.lastUpdateTime) / s_per_frame);
+        const time_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * time_per_s;
+        const time = clockMeasure();
+        const delta = @floatCast(f32, time_per_frame / @intToFloat(f64, time-self.lastUpdateTime));
         if (self.updateFn) |func| {
             func(allocator, self, delta) catch |err| printErr(err);
         }
         self.scene.gameObject.update(self.allocator, delta) catch |err| printErr(err);
-        self.lastUpdateTime = std.time.milliTimestamp();
+        const newTime = clockMeasure();
+        const updateLength = newTime - time;
         arena.deinit();
+        self.lastUpdateTime = time;
         if (doSleep) {
+
             const wait = @floatToInt(u64, 
-                @floor((1.0/@intToFloat(f64, self.updateTarget))*1000000000.0)
+                std.math.max(0, @ceil(
+                    (1.0 / @intToFloat(f64, self.updateTarget)) * std.time.ns_per_s
+                    - @intToFloat(f64, updateLength * ns_per_time)))
             );
             std.time.sleep(wait);
         }

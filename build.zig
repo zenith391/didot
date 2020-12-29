@@ -42,17 +42,18 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     const windowPath = try std.mem.concat(allocator, u8, &[_][]const u8{prefix, windowModule, "/window.zig"});
     if (std.mem.eql(u8, windowModule, "didot-glfw")) {
         step.linkSystemLibrary("glfw");
-        step.linkSystemLibrary("c");
+        step.linkLibC();
     }
     if (std.mem.eql(u8, windowModule, "didot-x11")) {
         step.linkSystemLibrary("X11");
-        step.linkSystemLibrary("c");
+        step.linkLibC();
     }
     const window = Pkg {
         .name = "didot-window",
         .path = windowPath,
         .dependencies = &[_]Pkg{zlm}
     };
+
     var graphics_deps = try allocator.alloc(Pkg, 3);
     graphics_deps[0] = window;
     graphics_deps[1] = image;
@@ -81,8 +82,10 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         .path = prefix ++ config.physicsModule ++ "/physics.zig",
         .dependencies = &[_]Pkg{objects, zlm}
     };
-    if (config.usePhysics)
+    if (config.usePhysics) {
         try @import(prefix ++ config.physicsModule ++ "/build.zig").build(step);
+        step.addPackage(physics);
+    }
 
     const app = Pkg {
         .name = "didot-app",
@@ -97,8 +100,6 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     step.addPackage(objects);
     step.addPackage(models);
     step.addPackage(app);
-    if (config.usePhysics)
-        step.addPackage(physics);
 }
 
 pub fn build(b: *Builder) !void {

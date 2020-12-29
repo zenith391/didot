@@ -11,11 +11,9 @@ pub const MeshElementType = c.GLuint;
 
 pub const Mesh = struct {
     // OpenGL related variables
-    hasVao: bool = false,
-    hasEbo: bool = true,
     vao: c.GLuint = 0,
     vbo: c.GLuint,
-    ebo: c.GLuint,
+    ebo: ?c.GLuint,
 
     /// how many elements this Mesh has
     elements: usize,
@@ -40,7 +38,7 @@ pub const Mesh = struct {
         c.glEnableVertexAttribArray(2);
 
         var ebo: c.GLuint = 0;
-        var elementsSize: usize = 0;
+        var elementsSize: ?usize = null;
         if (elements) |elem| {
             c.glGenBuffers(1, &ebo);
             c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, ebo);
@@ -51,10 +49,9 @@ pub const Mesh = struct {
         return Mesh{
             .vao = vao,
             .vbo = vbo,
-            .ebo = ebo,
-            .elements = elementsSize,
+            .ebo = if (elements == null) null else ebo,
+            .elements = elementsSize orelse 0,
             .vertices = vertices.len,
-            .hasEbo = elements != null,
         };
     }
 };
@@ -420,6 +417,7 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
     var assets = &scene.assetManager;
     if (scene.camera) |camera| {
         var projMatrix = zlm.Mat4.createPerspective(camera.fov, vp.z / vp.w, 0.1, 1000);
+        camera.shader.bind();
         camera.shader.setUniformMat4("projMatrix", projMatrix);
 
         // create the direction vector to be used with the view matrix.
@@ -474,7 +472,7 @@ fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !vo
             c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
         }
 
-        if (mesh.hasEbo) {
+        if (mesh.ebo != null) {
             c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
         } else {
             c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
@@ -490,9 +488,9 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
         }
     }
     const rotMatrix = 
-        zlm.Mat4.createAngleAxis_(zlm.Vec3.new(0, 0, 1), gameObject.rotation.z).mul(
-        zlm.Mat4.createAngleAxis_(zlm.Vec3.new(0, 1, 0), gameObject.rotation.y).mul(
-        zlm.Mat4.createAngleAxis_(zlm.Vec3.new(1, 0, 0), gameObject.rotation.x)));
+        zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), gameObject.rotation.z).mul(
+        zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), gameObject.rotation.y).mul(
+        zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), gameObject.rotation.x)));
     const matrix = 
         zlm.Mat4.identity
         .mul(zlm.Mat4.createScale(gameObject.scale))
@@ -520,7 +518,7 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
         camera.shader.setUniformFloat("material.shininess", s);
         camera.shader.setUniformMat4("modelMatrix", matrix);
 
-        if (mesh.hasEbo) {
+        if (mesh.ebo != null) {
             c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
         } else {
             c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
@@ -529,7 +527,7 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
 
     const held = gameObject.treeLock.acquire();
     var childs = gameObject.childrens.items;
-    for (childs) |*child| {
+    for (childs) |child| {
         try renderObject(child, assets, camera, matrix);
     }
     held.release();

@@ -10,7 +10,7 @@ const Window = graphics.Window;
 const Material = graphics.Material;
 const Allocator = std.mem.Allocator;
 
-pub const GameObjectArrayList = std.ArrayList(GameObject);
+pub const GameObjectArrayList = std.ArrayList(*GameObject);
 
 /// Mesh of a plane.
 pub var PrimitivePlaneMesh: Mesh = undefined;
@@ -235,7 +235,12 @@ pub const GameObject = struct {
             try component.update(allocator, delta);
         }
 
-        for (self.childrens.items) |*child| {
+        // The length is set in advance to avoid problems when adding a game object while updating
+        const len = self.childrens.items.len;
+        var copy = self.childrens;
+        var i: usize = 0;
+        while (i < len) : (i += 1) {
+            const child = self.childrens.items[i];
             child.parent = self;
             try child.update(allocator, delta); // TODO: correctly handle errors
         }
@@ -244,7 +249,7 @@ pub const GameObject = struct {
     pub fn findChild(self: *GameObject, name: []const u8) ?*GameObject {
         const held = self.treeLock.acquire();
         defer held.release();
-        for (self.childrens.items) |*child| {
+        for (self.childrens.items) |child| {
             if (std.mem.eql(u8, child.name, name)) return child;
         }
         return null;
@@ -301,7 +306,8 @@ pub const GameObject = struct {
         const held = self.treeLock.acquire();
         defer held.release();
         
-        var gameObject = go;
+        var gameObject = try self.childrens.allocator.create(GameObject);
+        gameObject.* = go;
         gameObject.parent = self;
         try self.childrens.append(gameObject);
     }
@@ -311,15 +317,21 @@ pub const GameObject = struct {
     }
 
     /// Frees childrens array list (not childrens themselves!), the object associated to it and itself.
-    pub fn deinit(self: *const GameObject) void {
+    pub fn deinit(self: *GameObject) void {
+        const allocator = self.childrens.allocator;
         self.childrens.deinit();
         for (self.components.items) |*component| {
             component.deinit();
         }
         self.components.deinit();
-        if (self.objectAllocator) |alloc| {
-            if (self.objectPointer != 0) {
-                alloc.destroy(@intToPtr(*u8, self.objectPointer));
+        const objectAllocator = self.objectAllocator;
+        const objectPointer = self.objectPointer;
+        if (self.parent != null) {
+            allocator.destroy(self);
+        }
+        if (objectAllocator) |alloc| {
+            if (objectPointer != 0) {
+                alloc.destroy(@intToPtr(*u8, objectPointer));
             }
         }
     }
@@ -327,7 +339,7 @@ pub const GameObject = struct {
     /// De-init the game object and its children (recursive deinit)
     pub fn deinitAll(self: *GameObject) void {
         const held = self.treeLock.acquire();
-        for (self.childrens.items) |*child| {
+        for (self.childrens.items) |child| {
             child.deinitAll();
         }
         held.release();
@@ -427,7 +439,9 @@ pub const Scene = struct {
         self.camera = null;
         self.skybox = null;
         self.pointLight = null;
-        for (childs.items) |*child| {
+
+        var held = self.gameObject.treeLock.acquire();
+        for (childs.items) |child| {
             if (child.objectType) |objectType| {
                 if (std.mem.eql(u8, objectType, "camera")) {
                     self.camera = @intToPtr(*Camera, child.objectPointer);
@@ -440,6 +454,7 @@ pub const Scene = struct {
                 }
             }
         }
+        held.release();
     }
 
     pub fn renderOffscreen(self: *Scene, viewport: zlm.Vec4) !void {

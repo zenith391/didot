@@ -1,29 +1,38 @@
 {
 	"objects": [
 		{
-			"type": "camera",
 			"name": "Camera",
 			"position": [1.5, 1.5, -0.5],
 			"rotation": [-120, -15, 0],
 			"scale": [1, 1, 1],
-			"shaders": {
-				"default": "Shaders/Default",
-				"skybox": "Shaders/Skybox"
+			"components": {
+				"Camera": {
+					"shaders": {
+						"default": "Shaders/Default",
+						"skybox": "Shaders/Skybox"
+					}
+				}
 			}
 		},
 		{
-			"type": "point_light",
 			"name": "Light",
 			"position": [1, 5, -5],
 			"rotation": [0, 0, 0],
 			"scale": [1, 1, 1],
-			"mesh": "Meshes/Primitives/Cube",
+			"mesh": "Mesh/Cube",
 			"material": {
 				"ambient": [1, 1, 1]
+			},
+			"components": {
+				"PointLight": {
+					"color": [1, 1, 1],
+					"constant": 1.0,
+					"linear": 0.018,
+					"quadratic": 0.016
+				}
 			}
 		},
 		{
-			"type": "normal",
 			"name": "Kart",
 			"position": [0.7, 0.75, -5],
 			"rotation": [0, 0, 0],
@@ -31,23 +40,21 @@
 			"mesh": "Meshes/Kart"
 		},
 		{
-			"type": "normal",
 			"name": "Terrain",
 			"position": [10, -0.75, -10],
 			"rotation": [0, 0, 0],
 			"scale": [20, 1, 20],
-			"mesh": "Meshes/Primitives/Cube",
+			"mesh": "Mesh/Cube",
 			"material": {
-				"texture": "Textures/Grass Texture"
+				"texture": "Texture/Grass Texture"
 			}
 		},
 		{
-			"type": "normal",
 			"name": "Cube",
 			"position": [-1.2, 0.75, 3],
 			"rotation": [0, 0, 0],
 			"scale": [1, 1, 1],
-			"mesh": "Meshes/Primitives/Cube",
+			"mesh": "Mesh/Cube",
 			"material": {
 				"ambient": [0.2, 0.1, 0.1],
 				"diffuse": [0.8, 0.8, 0.8]
@@ -61,7 +68,7 @@
 				"format": "obj"
 			}
 		},
-		"Textures/Grass Texture": {
+		"Texture/Grass Texture": {
 			"texture": {
 				"path": "assets/grass.bmp",
 				"format": "bmp"

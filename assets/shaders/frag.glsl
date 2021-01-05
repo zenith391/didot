@@ -1,5 +1,3 @@
-#version 150
-
 in vec2 texCoord;
 in vec3 normal;
 in vec3 fragPos;

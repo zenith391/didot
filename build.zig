@@ -4,12 +4,13 @@ const LibExeObjStep = std.build.LibExeObjStep;
 const Pkg = std.build.Pkg;
 
 pub const EngineConfig = struct {
-    /// Path to where didot is relative to the game's build.zig file. Must end with a slash.
+    /// Path to where didot is relative to the game's build.zig file. Must end with a slash or be empty.
     prefix: []const u8 = "",
     windowModule: []const u8 = "didot-glfw",
     physicsModule: []const u8 = "didot-ode",
-    /// Whether or not to automatically set the window module depending on the target platform.
-    /// didot-glfw will be used for Windows and didot-x11 will be used for Linux.
+    graphicsModule: []const u8 = "didot-opengl",
+    /// Whether or not to automatically set the recommended window module depending on the target platform.
+    /// Currently, didot-x11 will be used for Linux and didot-glfw for other platforms.
     autoWindow: bool = true,
     /// Whether or not to include the physics module
     usePhysics: bool = false
@@ -28,49 +29,37 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         .path = prefix ++ "didot-image/image.zig"
     };
 
-    var windowModule = config.windowModule;
-    if (config.autoWindow) {
-        const target = step.target.toTarget().os.tag;
-        switch (target) {
-            .linux => {
-                windowModule = "didot-x11";
-            },
-            else => {}
+    const windowModule = comptime blk: {
+        if (config.autoWindow) {
+            const target = step.target.toTarget().os.tag;
+            break :blk switch (target) {
+                .linux => "didot-x11",
+                else => config.windowModule
+            };
+        } else {
+            break :blk config.windowModule;
         }
-    }
+    };
 
-    const windowPath = try std.mem.concat(allocator, u8, &[_][]const u8{prefix, windowModule, "/window.zig"});
-    if (std.mem.eql(u8, windowModule, "didot-glfw")) {
-        step.linkSystemLibrary("glfw");
-        step.linkLibC();
-    }
-    if (std.mem.eql(u8, windowModule, "didot-x11")) {
-        step.linkSystemLibrary("X11");
-        step.linkLibC();
-    }
-    const window = Pkg {
+    const window = (try @import(prefix ++ windowModule ++ "/build.zig").build(step, config)) orelse Pkg {
         .name = "didot-window",
-        .path = windowPath,
+        .path = prefix ++ windowModule ++ "/window.zig",
         .dependencies = &[_]Pkg{zlm}
     };
 
-    var graphics_deps = try allocator.alloc(Pkg, 3);
-    graphics_deps[0] = window;
-    graphics_deps[1] = image;
-    graphics_deps[2] = zlm;
-
     const graphics = Pkg {
         .name = "didot-graphics",
-        .path = prefix ++ "didot-opengl/graphics.zig",
-        .dependencies = graphics_deps
+        .path = prefix ++ config.graphicsModule ++ "/graphics.zig",
+        .dependencies = &[_]Pkg{window,image,zlm}
     };
-    step.linkSystemLibrary("GL");
+    try @import(prefix ++ config.graphicsModule ++ "/build.zig").build(step);
     
     const models = Pkg {
         .name = "didot-models",
         .path = prefix ++ "didot-models/models.zig",
         .dependencies = &[_]Pkg{zlm,graphics}
     };
+
     const objects = Pkg {
         .name = "didot-objects",
         .path = prefix ++ "didot-objects/objects.zig",
@@ -111,7 +100,7 @@ pub fn build(b: *Builder) !void {
     exe.setTarget(target);
     exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
     try addEngineToExe(exe, .{
-        //.windowModule = "didot-x11",
+        .windowModule = "didot-glfw",
         .autoWindow = false,
         .usePhysics = true
     });

@@ -11,6 +11,7 @@ const Material = graphics.Material;
 const Allocator = std.mem.Allocator;
 
 pub const GameObjectArrayList = std.ArrayList(*GameObject);
+pub const ComponentMap = std.StringHashMap(Component);
 
 /// Mesh of a plane.
 pub var PrimitivePlaneMesh: Mesh = undefined;
@@ -184,7 +185,7 @@ pub const GameObject = struct {
     rotation: zlm.Vec3 = zlm.Vec3.zero,
     scale: zlm.Vec3 = zlm.Vec3.one,
     childrens: GameObjectArrayList,
-    components: std.ArrayList(Component),
+    components: ComponentMap,
 
     /// Type of object owning this game object ("camera", "scene", etc.)
     objectType: ?[]const u8 = null,
@@ -203,7 +204,7 @@ pub const GameObject = struct {
         var childs = GameObjectArrayList.init(allocator);
         return GameObject {
             .childrens = childs,
-            .components = std.ArrayList(Component).init(allocator)
+            .components = ComponentMap.init(allocator)
         };
     }
 
@@ -213,7 +214,7 @@ pub const GameObject = struct {
         return GameObject {
             .childrens = childs,
             .meshPath = meshPath,
-            .components = std.ArrayList(Component).init(allocator)
+            .components = ComponentMap.init(allocator)
         };
     }
 
@@ -225,12 +226,14 @@ pub const GameObject = struct {
             .objectType = customType,
             .objectPointer = ptr,
             .objectAllocator = allocator,
-            .components = std.ArrayList(Component).init(allocator)
+            .components = ComponentMap.init(allocator)
         };
     }
 
     pub fn update(self: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
-        for (self.components.items) |*component| {
+        var iterator = self.components.iterator();
+        while (iterator.next()) |entry| {
+            var component = &entry.value;
             component.gameObject = self;
             try component.update(allocator, delta);
         }
@@ -255,12 +258,16 @@ pub const GameObject = struct {
         return null;
     }
 
-    pub fn findComponent(self: *const GameObject, comptime nameTag: @Type(.EnumLiteral)) ?*Component {
-        const name = @tagName(nameTag);
-        for (self.components.items) |*component| {
-            if (std.mem.eql(u8, component.name.*, name)) return component;
+    pub fn findComponent(self: *const GameObject, comptime name: @Type(.EnumLiteral)) ?*Component {
+        if (self.components.get(@tagName(name))) |*cp| {
+            return cp;
+        } else {
+            return null;
         }
-        return null;
+    }
+
+    pub fn hasComponent(self: *const GameObject, comptime name: @Type(.EnumLiteral)) bool {
+        return self.findComponent(name) != null;
     }
 
     /// This functions returns the forward (the direction) vector of this game object using its rotation.
@@ -313,14 +320,16 @@ pub const GameObject = struct {
     }
 
     pub fn addComponent(self: *GameObject, cp: Component) !void {
-        try self.components.append(cp);
+        try self.components.put(cp.getName(), cp);
     }
 
     /// Frees childrens array list (not childrens themselves!), the object associated to it and itself.
     pub fn deinit(self: *GameObject) void {
         const allocator = self.childrens.allocator;
         self.childrens.deinit();
-        for (self.components.items) |*component| {
+        var iterator = self.components.iterator();
+        while (iterator.next()) |entry| {
+            var component = &entry.value;
             component.deinit();
         }
         self.components.deinit();
@@ -347,12 +356,29 @@ pub const GameObject = struct {
     }
 };
 
+pub const Projection = union(enum) {
+    Perspective: struct {
+        fov: f32,
+        far: f32,
+        near: f32
+    },
+    Orthographic: struct {
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        far: f32,
+        near: f32
+    }
+};
+
 pub const Camera = struct {
-    fov: f32,
     gameObject: GameObject,
     viewMatrix: zlm.Mat4,
     shader: graphics.ShaderProgram,
     skyboxShader: ?graphics.ShaderProgram,
+    projection: Projection,
+    priority: u32 = 0,
 
     /// Memory is caller-owned (de-init must be called before)
     pub fn create(allocator: *Allocator, shader: graphics.ShaderProgram) !*Camera {
@@ -361,7 +387,9 @@ pub const Camera = struct {
         go.rotation = zlm.Vec3.new(zlm.toRadians(-90.0), 0, 0);
         camera.gameObject = go;
         camera.shader = shader;
-        camera.fov = 70;
+        camera.projection = .{
+            .Perspective = .{ .fov = 70, .far = 1000, .near = 0.1 }
+        };
         return camera;
     }
 
@@ -370,27 +398,22 @@ pub const Camera = struct {
     }
 };
 
-pub const PointLight = struct {
-    gameObject: GameObject,
-    color: graphics.Color,
+pub const PointLightData = struct {
+    /// The color emitted by the light
+    color: graphics.Color = graphics.Color.one,
     /// Constant attenuation (the higher it is, the darker the light is)
-    constant: f32,
+    constant: f32 = 1.0,
     /// Linear attenuation
-    linear: f32,
+    linear: f32 = 0.018,
     /// Quadratic attenuation
-    quadratic: f32,
-
-    pub fn create(allocator: *Allocator) !*PointLight {
-        var light = try allocator.create(PointLight);
-        var go = GameObject.createCustom(allocator, "point_light", @ptrToInt(light));
-        light.gameObject = go;
-        light.color = zlm.Vec3.one;
-        light.constant = 1.0;
-        light.linear = 0.018;
-        light.quadratic = 0.016;
-        return light;
-    }
+    quadratic: f32 = 0.016
 };
+
+/// Point light component.
+/// Add it to a GameObject for it to emit point light.
+pub const PointLight = ComponentType(.PointLight, PointLightData, .{}) {};
+
+pub const Renderer2D = ComponentType(.Renderer2D, struct {}, .{}) {};
 
 pub const Scene = struct {
     gameObject: GameObject,
@@ -404,12 +427,14 @@ pub const Scene = struct {
     /// on top-level game objects to select one that corresponds
     /// to the "skybox" type.
     skybox: ?*GameObject,
-    pointLight: ?*PointLight,
+    pointLight: ?*GameObject,
     assetManager: AssetManager,
+    allocator: *Allocator,
 
     pub fn create(allocator: *Allocator, assetManager: ?AssetManager) !*Scene {
         var scene = try allocator.create(Scene);
-        scene.gameObject = GameObject.createCustom(allocator, "scene", @ptrToInt(scene));
+        scene.gameObject = GameObject.createEmpty(allocator);
+        scene.allocator = allocator;
         if (assetManager) |mg| {
             scene.assetManager = mg;
         } else {
@@ -444,14 +469,18 @@ pub const Scene = struct {
         for (childs.items) |child| {
             if (child.objectType) |objectType| {
                 if (std.mem.eql(u8, objectType, "camera")) {
-                    self.camera = @intToPtr(*Camera, child.objectPointer);
+                    const cam = @intToPtr(*Camera, child.objectPointer);
+                    if (self.camera) |currentCam| {
+                        if (cam.priority < currentCam.priority) continue;
+                    }
+                    self.camera = cam;
                     self.camera.?.gameObject = child.*;
-                } else if (std.mem.eql(u8, objectType, "point_light")) {
-                    self.pointLight = @intToPtr(*PointLight, child.objectPointer);
-                    self.pointLight.?.gameObject = child.*;
                 } else if (std.mem.eql(u8, objectType, "skybox")) {
                     self.skybox = child;
                 }
+            }
+            if (child.hasComponent(.PointLight)) {
+                self.pointLight = child;
             }
         }
         held.release();
@@ -477,12 +506,14 @@ pub const Scene = struct {
 
     pub fn deinit(self: *Scene) void {
         self.assetManager.deinit();
-        self.gameObject.deinit(); // last as it also frees the Scene object
+        self.gameObject.deinit();
+        self.allocator.destroy(self);
     }
 
     pub fn deinitAll(self: *Scene) void {
         self.assetManager.deinit();
-        self.gameObject.deinitAll(); // last as it also frees the Scene object
+        self.gameObject.deinitAll();
+        self.allocator.destroy(self);
     }
 };
 
@@ -515,5 +546,4 @@ test "default camera" {
 comptime {
     std.testing.refAllDecls(@This());
     std.testing.refAllDecls(GameObject);
-    std.testing.refAllDecls(PointLight);
 }

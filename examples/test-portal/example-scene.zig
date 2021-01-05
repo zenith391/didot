@@ -42,7 +42,7 @@ fn playerInput(allocator: *Allocator, component: *Component, delta: f32) !void {
     const gameObject = component.gameObject;
     const input = data.input;
 
-    const speed: f32 = 0.1 * delta;
+    const speed: f32 = 40 / delta;
 
     const camera = gameObject.parent.?.findChild("Camera").?;
     var forward = camera.getForward();
@@ -51,19 +51,19 @@ fn playerInput(allocator: *Allocator, component: *Component, delta: f32) !void {
 
     const rb = gameObject.findComponent(.Rigidbody).?.getData(physics.RigidbodyData);
     if (input.isKeyDown(Input.KEY_W)) {
-        rb.addForce(forward.scale(speed*400));
+        rb.addForce(forward.scale(speed));
     }
     if (input.isKeyDown(Input.KEY_S)) {
-        rb.setPosition(gameObject.position.add(forward.scale(-speed)));
+        rb.addForce(forward.scale(-speed));
     }
     if (input.isKeyDown(Input.KEY_A)) {
-        rb.setPosition(gameObject.position.add(left.scale(speed)));
+        rb.addForce(left.scale(speed));
     }
     if (input.isKeyDown(Input.KEY_D)) {
-        rb.setPosition(gameObject.position.add(left.scale(-speed)));
+        rb.addForce(left.scale(-speed));
     }
     if (input.isKeyDown(Input.KEY_SPACE)) {
-        rb.addForce(Vec3.new(0, 400*speed, 0));
+        rb.addForce(Vec3.new(0, speed, 0));
     }
 
     if (input.isKeyDown(Input.KEY_UP)) {
@@ -127,7 +127,14 @@ fn init(allocator: *Allocator, app: *Application) !void {
     player.scale = Vec3.new(2, 2, 2);
     player.name = "Player";
     try player.addComponent(try PlayerController.newWithData(allocator, .{ .input = &app.window.input }));
-    try player.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world }));
+    try player.addComponent(try physics.Rigidbody.newWithData(allocator,
+        .{
+            .world = &world,
+            .collider = .{
+                .Sphere = .{ .radius = 1.0 }
+                //.Box = .{ }
+            }
+        }));
     try scene.add(player);
 
     var camera = try Camera.create(allocator, shader);
@@ -148,7 +155,8 @@ fn init(allocator: *Allocator, app: *Application) !void {
     cube.position = Vec3.new(5, -0.75, -10);
     cube.scale = Vec3.new(250, 0.1, 250);
     cube.material = concreteMaterial;
-    try cube.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world, .kinematic=.Kinematic }));
+    try cube.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world, .kinematic=.Kinematic,
+        .collider = .{ .Box = .{ .size = Vec3.new(250, 0.1, 250) }}}));
     try scene.add(cube);
 
     var cube2 = GameObject.createObject(allocator, "Mesh/Cube");
@@ -156,14 +164,15 @@ fn init(allocator: *Allocator, app: *Application) !void {
     cube2.scale = Vec3.new(1, 2, 1);
     cube2.material.ambient = Vec3.new(0.2, 0.1, 0.1);
     cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
-    try cube2.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world = &world }));
+    try cube2.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world = &world,
+        .collider = .{ .Box = .{ .size = Vec3.new(1, 2, 1) }}}));
     try scene.add(cube2);
 
-    var light = try PointLight.create(allocator);
-    light.gameObject.position = Vec3.new(1, 5, -5);
-    light.gameObject.meshPath = "Mesh/Cube";
-    light.gameObject.material.ambient = Vec3.one;
-    try scene.add(light.gameObject);
+    var light = GameObject.createObject(allocator, "Mesh/Cube");
+    light.position = Vec3.new(1, 5, -5);
+    light.material.ambient = Vec3.one;
+    try light.addComponent(try PointLight.newWithData(allocator, .{}));
+    try scene.add(light);
 }
 
 var gp: std.heap.GeneralPurposeAllocator(.{}) = .{};

@@ -7,10 +7,12 @@ pub const Component = struct {
     data: usize,
     allocator: *Allocator,
     gameObject: *GameObject = undefined,
+    enabled: bool = true,
     // Uses a pointer in order to save memory.
     name: *const []const u8,
 
     pub fn update(self: *Component, allocator: *Allocator, delta: f32) anyerror!void {
+        if (!self.enabled) return;
         if (self.options.updateFn) |func| {
             try func(allocator, self, delta);
         }
@@ -42,6 +44,7 @@ pub const ComponentOptions = struct {
     updateFn: ?fn(allocator: *Allocator, component: *Component, delta: f32) anyerror!void = null
 };
 
+// TODO: maintain a registry with names and all the fields of the Data struct for scene loading.
 pub fn ComponentType(comptime name: @Type(.EnumLiteral), comptime Data: anytype, options: ComponentOptions) type {
     const ComponentTypeStruct = struct {
         /// The type name of the component (equals to the 'name' argument of the function).

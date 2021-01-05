@@ -1,3 +1,4 @@
+// Deprecated: to be replaced with ZWL
 const c = @import("c.zig");
 
 pub const WindowError = error {

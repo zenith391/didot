@@ -75,6 +75,10 @@ pub const ShaderProgram = struct {
     vao: c.GLuint,
     vertex: c.GLuint,
     fragment: c.GLuint,
+    allocator: *Allocator = std.heap.page_allocator,
+    uniformLocations: std.StringHashMap(c.GLint),
+    /// Hashes of the current values of uniforms. Used to avoid expensive glUniform
+    uniformHashes: std.StringHashMap(u32),
 
     pub fn createFromFile(allocator: *Allocator, vertPath: []const u8, fragPath: []const u8) !ShaderProgram {
         const vertFile = try std.fs.cwd().openFile(vertPath, .{ .read = true });
@@ -91,20 +95,22 @@ pub const ShaderProgram = struct {
         defer allocator.free(nullFrag);
         fragFile.close();
 
-        return try ShaderProgram.create(nullVert, nullFrag);
+        return try ShaderProgram.create(allocator, nullVert, nullFrag);
     }
 
-    pub fn create(vert: [:0]const u8, frag: [:0]const u8) ShaderError!ShaderProgram {
+    pub fn create(allocator: *Allocator, vert: [:0]const u8, frag: [:0]const u8) !ShaderProgram {
         const vertexShader = c.glCreateShader(c.GL_VERTEX_SHADER);
-        var v = vert;
+        var v = try std.fmt.allocPrintZ(allocator, "{}", .{vert});
         c.glShaderSource(vertexShader, 1, &v, null);
         c.glCompileShader(vertexShader);
+        allocator.free(v);
         try checkError(vertexShader);
 
         const fragmentShader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
-        var f = frag;
+        var f = try std.fmt.allocPrintZ(allocator, "#version 330 core\n#define MAX_POINT_LIGHTS 4\n{}", .{frag});
         c.glShaderSource(fragmentShader, 1, &f, null);
         c.glCompileShader(fragmentShader);
+        allocator.free(f);
         try checkError(fragmentShader);
 
         const shaderProgramId = c.glCreateProgram();
@@ -132,6 +138,9 @@ pub const ShaderProgram = struct {
             .vao = vao,
             .vertex = vertexShader,
             .fragment = fragmentShader,
+            .uniformLocations = std.StringHashMap(c.GLint).init(std.heap.page_allocator),
+            .uniformHashes = std.StringHashMap(u32).init(std.heap.page_allocator),
+            .allocator = allocator,
         };
     }
 
@@ -139,40 +148,61 @@ pub const ShaderProgram = struct {
         c.glUseProgram(self.id);
     }
 
-    /// Set an OpenGL uniform to the following 4x4 matrix.
-    pub fn setUniformMat4(self: *const ShaderProgram, name: [:0]const u8, mat: zlm.Mat4) void {
-        var uniform = c.glGetUniformLocation(self.id, name);
+    fn getUniformLocation(self: *ShaderProgram, name: [:0]const u8) c.GLint {
+        if (self.uniformLocations.get(name)) |location| {
+            return location;
+        } else {
+            const location = c.glGetUniformLocation(self.id, name);
+            if (location == -1) {
+                std.log.scoped(.didot).warn("Uniform not found: {}", .{name});
+            }
+            self.uniformLocations.put(name, location) catch {}; // as this is a cache, not being able to put the entry can be and should be discarded
+            return location;
+        }
+    }
 
-        var m = mat.fields;
-        const columns: [16]f32 = .{ // put the matrix in the order OpenGL wants it to be
-            m[0][0], m[0][1], m[0][2], m[0][3],
-            m[1][0], m[1][1], m[1][2], m[1][3],
-            m[2][0], m[2][1], m[2][2], m[2][3],
-            m[3][0], m[3][1], m[3][2], m[3][3],
-        };
-        c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, &columns[0]);
+    fn isUniformSame(self: *ShaderProgram, name: [:0]const u8, bytes: []const u8) bool {
+        const hash = std.hash.Crc32.hash(bytes);
+        defer {
+            self.uniformHashes.put(name, hash) catch {}; // again, as this is an optimization, it is not fatal if we can't put it in the map
+        }
+        if (self.uniformHashes.get(name)) |expected| {
+            return expected == hash;
+        } else {
+            return false;
+        }
+    }
+
+    /// Set an OpenGL uniform to the following 4x4 matrix.
+    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, val: zlm.Mat4) void {
+        if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
+        var uniform = self.getUniformLocation(name);
+        c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, &val.fields[0][0]);
     }
 
     /// Set an OpenGL uniform to the following boolean.
     pub fn setUniformBool(self: *ShaderProgram, name: [:0]const u8, val: bool) void {
-        var uniform = c.glGetUniformLocation(self.id, name);
+        if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
+        var uniform = self.getUniformLocation(name);
         var v: c.GLint = if (val) 1 else 0;
         c.glUniform1i(uniform, v);
     }
 
     /// Set an OpenGL uniform to the following float.
     pub fn setUniformFloat(self: *ShaderProgram, name: [:0]const u8, val: f32) void {
-        var uniform = c.glGetUniformLocation(self.id, name);
+        if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
+        var uniform = self.getUniformLocation(name);
         c.glUniform1f(uniform, val);
     }
 
     /// Set an OpenGL uniform to the following 3D float vector.
-    pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, vec: zlm.Vec3) void {
-        var uniform = c.glGetUniformLocation(self.id, name);
-        c.glUniform3f(uniform, vec.x, vec.y, vec.z);
+    pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, val: zlm.Vec3) void {
+        if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
+        var uniform = self.getUniformLocation(name);
+        c.glUniform3f(uniform, val.x, val.y, val.z);
     }
 
-    pub fn checkError(shader: c.GLuint) ShaderError!void {
+    fn checkError(shader: c.GLuint) ShaderError!void {
         var status: c.GLint = undefined;
         c.glGetShaderiv(shader, c.GL_COMPILE_STATUS, &status);
         if (status != c.GL_TRUE) {
@@ -188,6 +218,10 @@ pub const ShaderProgram = struct {
             std.log.scoped(.didot).alert("shader compilation errror:\n{}", .{buf[0..totalSize]});
             return ShaderError.ShaderCompileError;
         }
+    }
+
+    pub fn deinit(self: *ShaderProgram) void {
+        self.uniformLocations.deinit();
     }
 };
 
@@ -416,7 +450,10 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
 
     var assets = &scene.assetManager;
     if (scene.camera) |camera| {
-        var projMatrix = zlm.Mat4.createPerspective(camera.fov, vp.z / vp.w, 0.1, 1000);
+        var projMatrix = switch (camera.projection) {
+            .Perspective => |p| zlm.Mat4.createPerspective(p.fov, vp.z / vp.w, p.near, p.far),
+            .Orthographic => |p| zlm.Mat4.createOrthogonal(p.left, p.right, p.bottom, p.top, p.near, p.far)
+        };
         camera.shader.bind();
         camera.shader.setUniformMat4("projMatrix", projMatrix);
 
@@ -434,7 +471,7 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
         //const viewMatrix = rotMatrix;
 
         if (scene.skybox) |skybox| {
-            if (camera.skyboxShader) |skyboxShader| {
+            if (camera.skyboxShader) |*skyboxShader| {
                 skyboxShader.bind();
                 const view = viewMatrix.toMat3().toMat4();
                 skyboxShader.setUniformMat4("view", view);
@@ -446,11 +483,12 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
         camera.shader.bind();
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
         if (scene.pointLight) |light| {
-            camera.shader.setUniformVec3("light.position", light.gameObject.position);
-            camera.shader.setUniformVec3("light.color", light.color);
-            camera.shader.setUniformFloat("light.constant", light.constant);
-            camera.shader.setUniformFloat("light.linear", light.linear);
-            camera.shader.setUniformFloat("light.quadratic", light.quadratic);
+            const lightData = light.findComponent(.PointLight).?.getData(objects.PointLightData);
+            camera.shader.setUniformVec3("light.position", light.position);
+            camera.shader.setUniformVec3("light.color", lightData.color);
+            camera.shader.setUniformFloat("light.constant", lightData.constant);
+            camera.shader.setUniformFloat("light.linear", lightData.linear);
+            camera.shader.setUniformFloat("light.quadratic", lightData.quadratic);
             camera.shader.setUniformBool("useLight", true);
         } else {
             camera.shader.setUniformBool("useLight", false);
@@ -526,8 +564,7 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
     }
 
     const held = gameObject.treeLock.acquire();
-    var childs = gameObject.childrens.items;
-    for (childs) |child| {
+    for (gameObject.childrens.items) |child| {
         try renderObject(child, assets, camera, matrix);
     }
     held.release();

@@ -263,7 +263,7 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
                 imageData[pos+1] = filter(imageData, pixel[1], x+1, y, bytesPerLine, pos+1, 4);
                 imageData[pos+2] = filter(imageData, pixel[2], x+2, y, bytesPerLine, pos+2, 4);
                 imageData[pos+3] = filter(imageData, pixel[3], x+3, y, bytesPerLine, pos+3, 4);
-                x += 4; // since we use 3 bytes per pixel, let's directly increment X by 3
+                x += 4; // since we use 4 bytes per pixel, let's directly increment X by 4
                 // (that optimisation is also useful in the filter method)
             }
             y += 1;

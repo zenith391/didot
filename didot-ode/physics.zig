@@ -75,7 +75,10 @@ pub const World = struct {
 
     pub fn setGravity(self: *World, gravity: zlm.Vec3) void {
         c.dWorldSetGravity(self.id, gravity.x, gravity.y, gravity.z);
-        c.dWorldSetERP(self.id, 0.1);
+        c.dWorldSetAutoDisableFlag(self.id, 1);
+        c.dWorldSetAutoDisableLinearThreshold(self.id, 0.1);
+        c.dWorldSetAutoDisableAngularThreshold(self.id, 0.1);
+        //c.dWorldSetERP(self.id, 0.1);
         //dWorldSetCFM(self.id, 0.0000);
     }
 
@@ -85,7 +88,7 @@ pub const World = struct {
         const timeStep = 0.01;
         while (self.accumulatedStep > timeStep) {
             c.dSpaceCollide(self.space, self, nearCallback);
-            _ = c.dWorldQuickStep(self.id, timeStep);
+            _ = c.dWorldStep(self.id, timeStep);
             c.dJointGroupEmpty(self.contactGroup);
             self.accumulatedStep -= timeStep;
         }
@@ -106,6 +109,19 @@ pub const PhysicsMaterial = struct {
     bounciness: f32 = 0.0
 };
 
+pub const SphereCollider = struct {
+    radius: f32
+};
+
+pub const BoxCollider = struct {
+    size: zlm.Vec3 = zlm.Vec3.new(1, 1, 1)
+};
+
+pub const Collider = union(enum) {
+    Box: BoxCollider,
+    Sphere: SphereCollider
+};
+
 pub const RigidbodyData = struct {
     /// Set by the Rigidbody component allowing it to know when to initialize internal values.
     inited: bool = false,
@@ -114,6 +130,7 @@ pub const RigidbodyData = struct {
     kinematic: KinematicState = .Dynamic,
     gameObject: *GameObject = undefined,
     material: PhysicsMaterial = .{},
+    collider: Collider = .{ .Box = .{} },
     /// Internal value (ODE dBodyID)
     _body: c.dBodyID = undefined,
     /// Internal value (ODE dGeomID)
@@ -122,6 +139,7 @@ pub const RigidbodyData = struct {
     _mass: c.dMass = undefined,
 
     pub fn addForce(self: *RigidbodyData, force: zlm.Vec3) void {
+        c.dBodyEnable(self._body);
         c.dBodyAddForce(self._body, force.x, force.y, force.z);
     }
 
@@ -131,7 +149,8 @@ pub const RigidbodyData = struct {
     }
 };
 
-/// Rigidbody component. Add it to a GameObject for it to have physics with other rigidbodies.
+/// Rigidbody component.
+/// Add it to a GameObject for it to have physics with other rigidbodies.
 pub const Rigidbody = comptime objects.ComponentType(.Rigidbody, RigidbodyData, .{ .updateFn = rigidbodyUpdate }) {};
 
 fn quatToEuler(q: [*]const c.dReal) zlm.Vec3 {
@@ -155,15 +174,18 @@ fn rigidbodyUpdate(allocator: *Allocator, component: *Component, delta: f32) !vo
     const gameObject = component.gameObject;
     if (!data.inited) {
         data._body = c.dBodyCreate(data.world.id);
-        data._geom = c.dCreateBox(data.world.space, 1.0, 1.0, 1.0);
+        const scale = gameObject.scale;
+        data._geom = switch (data.collider) {
+            .Box => |box| c.dCreateBox(data.world.space, box.size.x, box.size.y, box.size.z),
+            .Sphere => |sphere| c.dCreateSphere(data.world.space, sphere.radius)
+        };
         data.gameObject = gameObject;
         c.dMassSetBox(&data._mass, 1.0, 1.0, 1.0, 1.0);
         c.dGeomSetBody(data._geom, data._body);
         data.setPosition(gameObject.position);
         c.dBodySetData(data._body, data);
         c.dBodySetMass(data._body, &data._mass);
-        c.dBodySetDamping(data._body, 0.001, 0.001);
-        c.dBodySetAutoDisableFlag(data._body, 1);
+        c.dBodySetDamping(data._body, 0.005, 0.005);
         data.inited = true;
     }
     if (c.dBodyIsEnabled(data._body) != 0) {
@@ -172,7 +194,7 @@ fn rigidbodyUpdate(allocator: *Allocator, component: *Component, delta: f32) !vo
             .Kinematic => c.dBodySetKinematic(data._body)
         }
         const scale = gameObject.scale;
-        c.dGeomBoxSetLengths(data._geom, scale.x, scale.y, scale.z);
+        //c.dGeomBoxSetLengths(data._geom, scale.x, scale.y, scale.z);
         const pos = c.dBodyGetPosition(data._body);
         const rot = quatToEuler(c.dBodyGetQuaternion(data._body));
         gameObject.rotation = rot;

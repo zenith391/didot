@@ -34,7 +34,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
             const target = step.target.toTarget().os.tag;
             break :blk switch (target) {
                 .linux => "didot-x11",
-                else => config.windowModule
+                else => "didot-glfw"
             };
         } else {
             break :blk config.windowModule;
@@ -96,18 +96,6 @@ pub fn build(b: *Builder) !void {
     var mode = b.standardReleaseOptions();
     const stripExample = b.option(bool, "strip-example", "Attempt to minify examples by stripping them and changing release mode.") orelse false;
 
-    const exe = b.addExecutable("didot-example-scene", "examples/test-portal/example-scene.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
-    try addEngineToExe(exe, .{
-        .windowModule = "didot-glfw",
-        .autoWindow = false,
-        .usePhysics = true
-    });
-    exe.single_threaded = stripExample;
-    exe.strip = stripExample;
-    exe.install();
-
     if (@hasField(LibExeObjStep, "emit_docs")) {
         const otest = b.addTest("didot.zig");
         otest.emit_docs = true;
@@ -117,17 +105,41 @@ pub fn build(b: *Builder) !void {
             .usePhysics = true
         });
 
-        const test_step = b.step("doc", "Test and document Didot");
+        const test_step = b.step("doc", "Test and generate documentation for Didot");
         test_step.dependOn(&otest.step);
     } else {
         const no_doc = b.addSystemCommand(&[_][]const u8{"echo", "Please build with the latest version of Zig to be able to emit documentation."});
-        const no_doc_step = b.step("doc", "Test and document Didot");
+        const no_doc_step = b.step("doc", "Test and generate documentation for Didot");
         no_doc_step.dependOn(&no_doc.step);
     }
 
-    const run_cmd = exe.run();
-    run_cmd.step.dependOn(b.getInstallStep());
+    const examples = [_][2][]const u8 {
+        .{"test-portal", "examples/test-portal/example-scene.zig"},
+        .{"kart-and-cubes", "examples/kart-and-cubes/example-scene.zig"}
+    };
 
-    const run_step = b.step("example", "Test Didot with kart-and-cubes example");
-    run_step.dependOn(&run_cmd.step);
+    const engineConfig = EngineConfig {
+        .windowModule = "didot-glfw",
+        .autoWindow = false,
+        .usePhysics = true
+    };
+
+    inline for (examples) |example| {
+        const name = example[0];
+        const path = example[1];
+
+        const exe = b.addExecutable(name, path);
+        exe.setTarget(target);
+        exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
+        try addEngineToExe(exe, engineConfig);
+        exe.single_threaded = stripExample;
+        exe.strip = stripExample;
+        exe.install();
+
+        const run_cmd = exe.run();
+        run_cmd.step.dependOn(&exe.install_step.?.step);
+
+        const run_step = b.step(name, "Test Didot with the " ++ name ++ " example");
+        run_step.dependOn(&run_cmd.step);
+    }
 }

@@ -44,6 +44,52 @@ pub const ComponentOptions = struct {
     updateFn: ?fn(allocator: *Allocator, component: *Component, delta: f32) anyerror!void = null
 };
 
+/// System selector to select objects where component T has just been created.
+pub fn Created(comptime T: type) type {
+
+}
+
+/// System selector to select objects without component T, you should feed a struct type instead of a pointer to struct type as the
+/// pointer info (const or not const) is not used for a Without query.
+pub fn Without(comptime T: type) type {
+
+}
+
+/// Just some syntaxtic sugar (does nothing other than consistency with Without, Created, ...)
+pub fn With(comptime T: type) type {
+    return T;
+}
+
+// fn testSystem(pos: *Position, vel: *const Velocity); is used for single item systems
+// fn testSystem(ent: Query(.{*Mob}), obs: Query(.{*const Obstacle}))
+// fn testSystem(x: Query(.{Without(Velocity), With(*Position)})) without doesn't need a pointer
+
+// Note: functions that accept queries must be functional, as didot might only give a subset of query for performance reasons
+// Example: Query(.{*Position, *const Velocity})
+// You have to specify something like Query(.{*Position, *const Velocity, .sync=true}) to avoid this
+/// Queries are to be used for processing multiple components at a time
+pub fn Query(comptime parameters: anytype) type {
+    const SystemQuery = struct {
+        const Result = struct {
+            go: GameObject
+        };
+
+        const Iterator = struct {
+            pos: usize = 0,
+
+            pub fn next(self: *Iterator) ?Result {
+                return null;
+            }
+        };
+
+        pub fn iterator(self: *const @This()) Iterator {
+            return Iterator {};
+        }
+
+    };
+    return SystemQuery;
+}
+
 // TODO: maintain a registry with names and all the fields of the Data struct for scene loading.
 pub fn ComponentType(comptime name: @Type(.EnumLiteral), comptime Data: anytype, options: ComponentOptions) type {
     const ComponentTypeStruct = struct {

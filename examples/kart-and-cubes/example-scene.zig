@@ -3,7 +3,7 @@ const zlm = @import("zlm");
 const Vec3 = zlm.Vec3;
 const Allocator = std.mem.Allocator;
 
-const graphics = @import("didot-graphics");
+usingnamespace @import("didot-graphics");
 const objects = @import("didot-objects");
 const models = @import("didot-models");
 const image = @import("didot-image");
@@ -11,12 +11,6 @@ const physics = @import("didot-physics");
 const bmp = image.bmp;
 const obj = models.obj;
 const Application = @import("didot-app").Application;
-
-const Texture = graphics.Texture;
-const Input = graphics.Input;
-const Window = graphics.Window;
-const ShaderProgram = graphics.ShaderProgram;
-const Material = graphics.Material;
 
 const GameObject = objects.GameObject;
 const Scene = objects.Scene;
@@ -30,9 +24,10 @@ var cube2: GameObject = undefined;
 const Component = objects.Component;
 const CameraControllerData = struct { input: *Input };
 const CameraController = objects.ComponentType(.CameraController, CameraControllerData, .{ .updateFn = cameraInput }) {};
-fn cameraInput(allocator: *Allocator, component: *Component, gameObject: *GameObject, delta: f32) !void {
+fn cameraInput(allocator: *Allocator, component: *Component, delta: f32) !void {
     const data = component.getData(CameraControllerData);
     const input = data.input;
+    const gameObject = component.gameObject;
 
     const speed: f32 = 0.1 * delta;
     const forward = gameObject.getForward();
@@ -105,28 +100,24 @@ fn cameraInput(allocator: *Allocator, component: *Component, gameObject: *GameOb
 }
 
 const TestLight = objects.ComponentType(.TestLight, struct {}, .{ .updateFn = testLight }) {};
-fn testLight(allocator: *Allocator, component: *Component, gameObject: *GameObject, delta: f32) !void {
+fn testLight(allocator: *Allocator, component: *Component, delta: f32) !void {
     const time = @intToFloat(f64, std.time.milliTimestamp());
     const rad = @floatCast(f32, @mod((time / 1000.0), std.math.pi * 2.0));
-    gameObject.position = Vec3.new(std.math.sin(rad) * 20 + 10, 3, std.math.cos(rad) * 10 - 10);
+    component.gameObject.position = Vec3.new(std.math.sin(rad) * 20 + 10, 3, std.math.cos(rad) * 10 - 10);
 }
 
 fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject {
     var skyboxShader = try ShaderProgram.createFromFile(allocator, "assets/shaders/skybox-vert.glsl", "assets/shaders/skybox-frag.glsl");
     camera.*.skyboxShader = skyboxShader;
 
-    try scene.assetManager.put("Texture/Skybox", .{
-        .loader = graphics.textureAssetLoader,
-        .loaderData = try graphics.TextureAssetLoaderData.initCubemap(allocator, .{
-            .front = "assets/textures/skybox/front.bmp",
-            .back = "assets/textures/skybox/back.bmp",
-            .left = "assets/textures/skybox/left.bmp",
-            .right = "assets/textures/skybox/right.bmp",
-            .top = "assets/textures/skybox/top.bmp",
-            .bottom = "assets/textures/skybox/bottom.bmp"
-        }, "bmp"),
-        .objectType = .Texture
-    });
+    try scene.assetManager.put("Texture/Skybox", try TextureAsset.initCubemap(allocator, .{
+        .front = "assets/textures/skybox/front.bmp",
+        .back = "assets/textures/skybox/back.bmp",
+        .left = "assets/textures/skybox/left.bmp",
+        .right = "assets/textures/skybox/right.bmp",
+        .top = "assets/textures/skybox/top.bmp",
+        .bottom = "assets/textures/skybox/bottom.bmp"
+    }, "bmp"));
 
     var skyboxMaterial = Material{ .texturePath = "Texture/Skybox" };
     var skybox = try objects.createSkybox(allocator);
@@ -170,15 +161,10 @@ fn init(allocator: *Allocator, app: *Application) !void {
     var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
     const scene = app.scene;
 
-    try scene.assetManager.put("Texture/Grass", .{
-        .loader = graphics.textureAssetLoader,
-        .loaderData = try graphics.TextureAssetLoaderData.init(allocator, .{
-            .path = "assets/textures/grass.png",
-            .format = "png",
-            .tiling = zlm.Vec2.new(5, 5)
-        }),
-        .objectType = .Texture,
-    });
+    try scene.assetManager.put("Texture/Grass", try TextureAsset.init(allocator, .{
+        .path = "assets/textures/grass.png", .format = "png",
+        .tiling = zlm.Vec2.new(2, 2)
+    }));
     var grassMaterial = Material{ .texturePath = "Texture/Grass" };
 
     var camera = try Camera.create(allocator, shader);
@@ -195,7 +181,9 @@ fn init(allocator: *Allocator, app: *Application) !void {
     cube.position = Vec3.new(5, -0.75, -10);
     cube.scale = Vec3.new(50, 1, 50);
     cube.material = grassMaterial;
-    try cube.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world, .kinematic=.Kinematic }));
+    try cube.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world, .kinematic=.Kinematic, .collider = .{
+        .Box = .{ .size = Vec3.new(50, 1, 50) }
+        } }));
     try scene.add(cube);
 
     cube2 = GameObject.createObject(allocator, "Mesh/Cube");
@@ -237,12 +225,12 @@ fn init(allocator: *Allocator, app: *Application) !void {
         i += 1;
     }
 
-    var light = try PointLight.create(allocator);
-    light.gameObject.position = Vec3.new(1, 5, -5);
-    light.gameObject.meshPath = "Mesh/Cube";
-    light.gameObject.material.ambient = Vec3.one;
-    try light.gameObject.addComponent(try TestLight.new(allocator));
-    try scene.add(light.gameObject);
+    var light = GameObject.createObject(allocator, "Mesh/Cube");
+    light.position = Vec3.new(1, 5, -5);
+    light.material.ambient = Vec3.one;
+    try light.addComponent(try TestLight.new(allocator));
+    try light.addComponent(try PointLight.newWithData(allocator, .{}));
+    try scene.add(light);
 }
 
 var gp: std.heap.GeneralPurposeAllocator(.{}) = .{};
@@ -253,8 +241,7 @@ pub fn main() !void {
     var scene = try Scene.create(allocator, null);
     var app = Application{
         .title = "Test Cubes",
-        .initFn = init,
-        .updateFn = update,
+        .initFn = init
     };
     try app.run(allocator, scene);
 }

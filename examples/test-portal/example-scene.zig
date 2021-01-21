@@ -13,6 +13,12 @@ var world: physics.World = undefined;
 var simPaused: bool = false;
 var r = std.rand.DefaultPrng.init(0);
 
+const App = comptime blk: {
+    comptime var systems = Systems {};
+    systems.addSystem(update);
+    break :blk Application(systems);
+};
+
 const CameraControllerData = struct { input: *Input, player: *GameObject };
 const CameraController = ComponentType(.CameraController, CameraControllerData, .{ .updateFn = cameraInput }) {};
 fn cameraInput(allocator: *Allocator, component: *Component, delta: f32) !void {
@@ -103,12 +109,19 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject
     return skybox;
 }
 
-fn update(allocator: *Allocator, app: *Application, delta: f32) !void {
-    if (!simPaused)
+fn testSystem(query: Query(.{})) !void {
+    var iter = query.iterator();
+    while (iter.next()) |go| {
+
+    }
+}
+
+fn update() !void {
+     if (!simPaused)
         world.update();
 }
 
-fn init(allocator: *Allocator, app: *Application) !void {
+fn init(allocator: *Allocator, app: *App) !void {
     world = physics.World.create();
     world.setGravity(zlm.Vec3.new(0, -9.8, 0));
 
@@ -181,10 +194,10 @@ pub fn main() !void {
     defer _ = gp.deinit();
     const allocator = &gp.allocator;
     var scene = try Scene.create(allocator, null);
-    var app = Application{
+
+    var app = App {
         .title = "Test Room",
-        .initFn = init,
-        .updateFn = update,
+        .initFn = init
     };
     try app.run(allocator, scene);
 }

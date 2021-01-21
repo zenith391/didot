@@ -100,14 +100,14 @@ pub const ShaderProgram = struct {
 
     pub fn create(allocator: *Allocator, vert: [:0]const u8, frag: [:0]const u8) !ShaderProgram {
         const vertexShader = c.glCreateShader(c.GL_VERTEX_SHADER);
-        var v = try std.fmt.allocPrintZ(allocator, "{}", .{vert});
+        var v = try std.fmt.allocPrintZ(allocator, "{s}", .{vert});
         c.glShaderSource(vertexShader, 1, &v, null);
         c.glCompileShader(vertexShader);
         allocator.free(v);
         try checkError(vertexShader);
 
         const fragmentShader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
-        var f = try std.fmt.allocPrintZ(allocator, "#version 330 core\n#define MAX_POINT_LIGHTS 4\n{}", .{frag});
+        var f = try std.fmt.allocPrintZ(allocator, "#version 330 core\n#define MAX_POINT_LIGHTS 4\n{s}", .{frag});
         c.glShaderSource(fragmentShader, 1, &f, null);
         c.glCompileShader(fragmentShader);
         allocator.free(f);
@@ -154,7 +154,7 @@ pub const ShaderProgram = struct {
         } else {
             const location = c.glGetUniformLocation(self.id, name);
             if (location == -1) {
-                std.log.scoped(.didot).warn("Uniform not found: {}", .{name});
+                std.log.scoped(.didot).warn("Uniform not found: {s}", .{name});
             }
             self.uniformLocations.put(name, location) catch {}; // as this is a cache, not being able to put the entry can be and should be discarded
             return location;
@@ -215,13 +215,14 @@ pub const ShaderProgram = struct {
                 return ShaderError.InvalidGLContextError;
             }
             var totalSize: usize = @intCast(usize, totalLen);
-            std.log.scoped(.didot).alert("shader compilation errror:\n{}", .{buf[0..totalSize]});
+            std.log.scoped(.didot).alert("shader compilation errror:\n{s}", .{buf[0..totalSize]});
             return ShaderError.ShaderCompileError;
         }
     }
 
     pub fn deinit(self: *ShaderProgram) void {
         self.uniformLocations.deinit();
+        self.uniformHashes.deinit();
     }
 };
 

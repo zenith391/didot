@@ -393,7 +393,7 @@ pub const Camera = struct {
         return camera;
     }
 
-    pub fn deinit(self: *const Camera) void {
+    pub fn deinit(self: *Camera) void {
         self.gameObject.deinit();
     }
 };
@@ -454,7 +454,7 @@ pub const Scene = struct {
     }
 
     pub fn loadFromMemory(allocator: *Allocator, json: []const u8) !Scene {
-        std.debug.warn("{}\n", .{json});
+        std.debug.warn("{s}\n", .{json});
     }
 
     fn renderCommon(self: *Scene) void {
@@ -527,19 +527,19 @@ test "empty gameobject" {
     expect(go.objectType == null);
 }
 
-test "empty scene" {
+test "empty asset" {
     var scene = try Scene.create(std.testing.allocator, null);
-    expect(scene.gameObject.objectType != null);
-    expect(std.mem.eql(u8, scene.gameObject.objectType.?, "scene"));
+    var mgr = scene.assetManager;
+    std.testing.expectEqual(false, mgr.has("azerty"));
     scene.deinit();
 }
 
 test "default camera" {
     var alloc = std.heap.page_allocator;
     var cam = try Camera.create(alloc, undefined);
-    expect(cam.fov == 70); // default FOV
+    expect(cam.projection.Perspective.fov == 70); // default FOV
     expect(cam.gameObject.objectType != null);
-    expect(std.mem.eql(u8, cam.gameObject.objectType.?, "camera"));
+    std.testing.expectEqualStrings("camera", cam.gameObject.objectType.?);
     cam.deinit();
 }
 

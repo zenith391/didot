@@ -20,7 +20,7 @@ fn ensureInit() void {
         _ = c.dInitODE2(0);
         const conf = @ptrCast([*:0]const u8, c.dGetConfiguration());
         logger.debug("Initialized ODE.", .{});
-        logger.debug("ODE configuration: {}", .{conf});
+        logger.debug("ODE configuration: {s}", .{conf});
         isOdeInit = true;
     }
 }

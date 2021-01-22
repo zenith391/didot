@@ -16,6 +16,7 @@ var r = std.rand.DefaultPrng.init(0);
 const App = comptime blk: {
     comptime var systems = Systems {};
     systems.addSystem(update);
+    systems.addSystem(testSystem);
     break :blk Application(systems);
 };
 

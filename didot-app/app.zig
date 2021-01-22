@@ -8,7 +8,7 @@ const Window = graphics.Window;
 const Scene = objects.Scene;
 
 const System = struct {
-    ptr: anytype,
+    function: anytype,
     type: type,
 };
 
@@ -18,7 +18,7 @@ pub const Systems = struct {
     pub fn addSystem(comptime self: *Systems, system: anytype) void {
         const T = @TypeOf(system);
         const info = @typeInfo(T).Fn;
-        const arr = [1]System { .{ .type = T, .ptr = system } };
+        const arr = [1]System { .{ .type = T, .function = system } };
         self.items = self.items ++ arr;
     }
 };
@@ -88,8 +88,22 @@ pub fn Application(comptime systems: Systems) type {
             self.scene.gameObject.update(self.allocator, dt) catch |err| printErr(err);
 
             inline for (systems.items) |sys| {
-                std.log.info("{}", .{sys.type});
-                sys.ptr() catch |err| printErr(err);
+                const info = @typeInfo(sys.type).Fn;
+                var tuple: std.meta.ArgsTuple(sys.type) = undefined;
+
+                inline for (info.args) |arg, i| {
+                    const key = comptime std.fmt.comptimePrint("{}", .{i});
+                    const Type = arg.arg_type.?;
+                    if (@typeName(Type) == "SystemQuery") {
+                        var query = Type {};
+                        @field(tuple, key) = query;
+                    } else {
+                        @compileError("Invalid argument type: " ++ @typeName(Type));
+                    }
+                }
+                
+                const opts: std.builtin.CallOptions = .{};
+                try @call(opts, sys.function, tuple);
             }
             
             const updateLength = self.timer.read();

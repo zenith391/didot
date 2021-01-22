@@ -55,16 +55,23 @@ pub fn Without(comptime T: type) type {
 
 }
 
-/// Just some syntaxtic sugar (does nothing other than consistency with Without, Created, ...)
+/// System selector to select objects with component T, you should feed a pointer to struct type as the
+/// pointer info (const or not const) is used for a With query.
+/// This is also the default system selector.
 pub fn With(comptime T: type) type {
-    return T;
+    return struct {
+        const is_condition = true;
+
+        pub fn include(go: GameObject) bool {
+            return true;
+        }
+    };
 }
 
 // fn testSystem(pos: *Position, vel: *const Velocity); is used for single item systems
 // fn testSystem(ent: Query(.{*Mob}), obs: Query(.{*const Obstacle}))
 // fn testSystem(x: Query(.{Without(Velocity), With(*Position)})) without doesn't need a pointer
 
-// Note: functions that accept queries must be functional, as didot might only give a subset of query for performance reasons
 // Example: Query(.{*Position, *const Velocity})
 // You have to specify something like Query(.{*Position, *const Velocity, .sync=true}) to avoid this
 /// Queries are to be used for processing multiple components at a time
@@ -84,6 +91,10 @@ pub fn Query(comptime parameters: anytype) type {
 
         pub fn iterator(self: *const @This()) Iterator {
             return Iterator {};
+        }
+
+        pub fn parallelIterator(self: *const @This(), divides: usize) Iterator {
+            @compileError("TODO");
         }
 
     };

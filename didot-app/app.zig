@@ -23,6 +23,31 @@ pub const Systems = struct {
     }
 };
 
+pub fn log(
+    comptime message_level: std.log.Level,
+    comptime scope: @Type(.EnumLiteral),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    if (@enumToInt(message_level) <= @enumToInt(std.log.level)) {
+        const level_txt = switch (message_level) {
+            .emerg => "emergency",
+            .alert => "alert",
+            .crit => "critical",
+            .err => "error",
+            .warn => "warning",
+            .notice => "notice",
+            .info => "info",
+            .debug => "debug",
+        };
+        const prefix2 = if (scope == .default) " -> " else " (" ++ @tagName(scope) ++ ") -> ";
+        const stderr = std.io.getStdErr().writer();
+        const held = std.debug.getStderrMutex().acquire();
+        defer held.release();
+        nosuspend stderr.print("[" ++ level_txt ++ "]" ++ prefix2 ++ format ++ "\n", args) catch return;
+    }
+}
+
 const SystemList = std.ArrayList(usize);
 
 /// Helper class for using Didot.
@@ -38,7 +63,7 @@ pub fn Application(comptime systems: Systems) type {
         title: [:0]const u8 = "Didot Game",
         allocator: *Allocator = undefined,
         /// Optional function to be called on application init.
-        initFn: ?fn(allocator: *Allocator, app: *Self) anyerror!void = null,
+        initFn: ?fn(allocator: *Allocator, app: *Self) callconv(if (std.io.is_async) .Async else .Unspecified) anyerror!void = null,
         closing: bool = false,
         timer: std.time.Timer = undefined,
 
@@ -67,7 +92,14 @@ pub fn Application(comptime systems: Systems) type {
             });
 
             if (self.initFn) |func| {
-                try func(allocator, self);
+                if (std.io.is_async) {
+                    var stack = try allocator.alignedAlloc(u8, 16, @frameSize(func));
+                    defer allocator.free(stack);
+                    var result: anyerror!void = undefined;
+                    try await @asyncCall(stack, &result, func, .{allocator, self});
+                } else {
+                    try func(allocator, self);
+                }
             }
         }
 
@@ -85,6 +117,8 @@ pub fn Application(comptime systems: Systems) type {
             const time_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * std.time.ns_per_s;
             const time = self.timer.lap();
             const dt = @floatCast(f32, time_per_frame / @intToFloat(f64, time));
+
+            var result: anyerror!void = undefined;
             self.scene.gameObject.update(self.allocator, dt) catch |err| printErr(err);
 
             inline for (systems.items) |sys| {
@@ -129,7 +163,11 @@ pub fn Application(comptime systems: Systems) type {
         pub fn loop(self: *Self) !void {
             var thread: *std.Thread = undefined;
             if (!single_threaded) {
-                thread = try std.Thread.spawn(self, updateLoop);
+                if (std.io.is_async) {
+                    _ = async self.updateLoop();
+                } else {
+                    thread = try std.Thread.spawn(self, updateLoop);
+                }
             }
             while (self.window.update()) {
                 if (single_threaded) {
@@ -138,7 +176,7 @@ pub fn Application(comptime systems: Systems) type {
                 try self.scene.render(self.window);
             }
             self.closing = true;
-            if (!single_threaded) {
+            if (!single_threaded and !std.io.is_async) {
                 thread.wait(); // thread must be closed before scene is de-init (to avoid use-after-free)
             }
             self.closing = false;

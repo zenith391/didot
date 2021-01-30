@@ -217,14 +217,10 @@ pub const Window = struct {
         c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
         c.glfwWindowHint(c.GLFW_RESIZABLE, c.GLFW_TRUE);
 
-        const nullableWindow = c.glfwCreateWindow(800, 600, "", null, null);
-        var window: *c.GLFWwindow = undefined;
-        if (nullableWindow) |win| {
-            window = win;
-        } else {
+        const window = c.glfwCreateWindow(800, 600, "", null, null) orelse {
             std.debug.warn("Could not create GLFW window!\n", .{});
             return WindowError.InitializationError;
-        }
+        };
         c.glfwMakeContextCurrent(window);
         c.glfwSwapInterval(1);
         return Window {

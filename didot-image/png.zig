@@ -142,9 +142,7 @@ fn readChunk(allocator: *Allocator, reader: anytype) !Chunk {
     };
 }
 
-pub fn read(allocator: *Allocator, path: []const u8) !Image {
-    const file = try std.fs.cwd().openFile(path, .{ .read = true });
-    const unbufferedReader = file.reader();
+pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
     var bufferedReader = std.io.BufferedReader(16*1024, @TypeOf(unbufferedReader)) { 
         .unbuffered_reader = unbufferedReader
     };

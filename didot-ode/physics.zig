@@ -11,7 +11,7 @@ const Component = objects.Component;
 const GameObject = objects.GameObject;
 
 var isOdeInit: bool = false;
-const logger = std.log.scoped(.didotphysics);
+const logger = std.log.scoped(.didot);
 
 var odeThread: ?std.Thread.Id = null;
 

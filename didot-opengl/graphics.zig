@@ -4,7 +4,7 @@ const zlm = @import("zlm");
 const Thread = std.Thread;
 const Allocator = std.mem.Allocator;
 
-pub const ShaderError = error{ ShaderCompileError, InvalidGLContextError };
+pub const ShaderError = error{ ShaderCompileError, InvalidContextError };
 
 /// The type used for meshes's elements
 pub const MeshElementType = c.GLuint;
@@ -46,6 +46,8 @@ pub const Mesh = struct {
             elementsSize = elem.len;
         }
 
+        std.log.scoped(.didot).debug("Created mesh (VAO = {}, VBO = {})", .{vao, vbo});
+
         return Mesh{
             .vao = vao,
             .vbo = vbo,
@@ -61,7 +63,7 @@ pub const Mesh = struct {
 pub const Color = zlm.Vec3;
 
 pub const Material = struct {
-    texturePath: ?[]const u8 = null,
+    texture: ?AssetHandle = null,
     ambient: Color = Color.zero,
     diffuse: Color = Color.one,
     specular: Color = Color.one,
@@ -133,6 +135,8 @@ pub const ShaderProgram = struct {
         c.glVertexAttribPointer(@bitCast(c.GLuint, texAttrib), 2, c.GL_FLOAT, c.GL_FALSE, stride, 3 * @sizeOf(f32));
         c.glEnableVertexAttribArray(@bitCast(c.GLuint, texAttrib));
 
+        std.log.scoped(.didot).debug("Created shader", .{});
+
         return ShaderProgram{
             .id = shaderProgramId,
             .vao = vao,
@@ -148,20 +152,22 @@ pub const ShaderProgram = struct {
         c.glUseProgram(self.id);
     }
 
-    fn getUniformLocation(self: *ShaderProgram, name: [:0]const u8) c.GLint {
+    inline fn getUniformLocation(self: *ShaderProgram, name: [:0]const u8) c.GLint {
         if (self.uniformLocations.get(name)) |location| {
             return location;
         } else {
             const location = c.glGetUniformLocation(self.id, name);
             if (location == -1) {
-                std.log.scoped(.didot).warn("Uniform not found: {s}", .{name});
+                std.log.scoped(.didot).warn("Shader uniform not found: {s}", .{name});
+            } else {
+                std.log.scoped(.didot).debug("Uniform location of {s} is {}", .{name, location});
             }
             self.uniformLocations.put(name, location) catch {}; // as this is a cache, not being able to put the entry can be and should be discarded
             return location;
         }
     }
 
-    fn isUniformSame(self: *ShaderProgram, name: [:0]const u8, bytes: []const u8) bool {
+    inline fn isUniformSame(self: *ShaderProgram, name: [:0]const u8, bytes: []const u8) bool {
         const hash = std.hash.Crc32.hash(bytes);
         defer {
             self.uniformHashes.put(name, hash) catch {}; // again, as this is an optimization, it is not fatal if we can't put it in the map
@@ -204,6 +210,10 @@ pub const ShaderProgram = struct {
 
     fn checkError(shader: c.GLuint) ShaderError!void {
         var status: c.GLint = undefined;
+        const err = c.glGetError();
+        if (err != c.GL_NO_ERROR) {
+            std.log.scoped(.didot).err("GL error while initializing shaders: {}", .{err});
+        }
         c.glGetShaderiv(shader, c.GL_COMPILE_STATUS, &status);
         if (status != c.GL_TRUE) {
             var buf: [2048]u8 = undefined;
@@ -212,7 +222,7 @@ pub const ShaderProgram = struct {
             if (totalLen == -1) {
                 // the length of the infolog seems to not be set
                 // when a GL context isn't set (so when the window isn't created)
-                return ShaderError.InvalidGLContextError;
+                return ShaderError.InvalidContextError;
             }
             var totalSize: usize = @intCast(usize, totalLen);
             std.log.scoped(.didot).alert("shader compilation errror:\n{s}", .{buf[0..totalSize]});
@@ -230,11 +240,13 @@ const image = @import("didot-image");
 const Image = image.Image;
 
 pub const CubemapSettings = struct {
-    right: []const u8, left: []const u8, top: []const u8, bottom: []const u8, front: []const u8, back: []const u8
+    right: AssetHandle, left: AssetHandle, top: AssetHandle, bottom: AssetHandle, front: AssetHandle, back: AssetHandle
 };
 
 pub const Texture = struct {
     id: c.GLuint,
+    width: usize = 0,
+    height: usize = 0,
     tiling: zlm.Vec2 = zlm.Vec2.new(1, 1),
 
     pub fn createEmptyCubemap() Texture {
@@ -270,9 +282,9 @@ pub const Texture = struct {
 
 // Image asset loader
 pub const TextureAsset = struct {
-    pub fn init2D(allocator: *Allocator, path: []const u8, format: []const u8) !Asset {
+    pub fn init2D(allocator: *Allocator, format: []const u8) !Asset {
         var data = try allocator.create(TextureAssetLoaderData);
-        data.path = path;
+        data.tiling = zlm.Vec2.new(0, 0);
         data.cubemap = null;
         data.format = format;
         return Asset {
@@ -294,11 +306,9 @@ pub const TextureAsset = struct {
     }
 
     /// Memory is caller owned
-    pub fn initCubemap(allocator: *Allocator, cb: CubemapSettings, format: []const u8) !Asset {
+    pub fn initCubemap(allocator: *Allocator, cb: CubemapSettings) !Asset {
         var data = try allocator.create(TextureAssetLoaderData);
-        data.path = null;
         data.cubemap = cb;
-        data.format = format;
         return Asset {
             .loader = textureAssetLoader,
             .loaderData = @ptrToInt(data),
@@ -307,7 +317,6 @@ pub const TextureAsset = struct {
     }
 };
 pub const TextureAssetLoaderData = struct {
-    path: ?[]const u8 = null,
     cubemap: ?CubemapSettings = null,
     format: []const u8,
     tiling: zlm.Vec2 = zlm.Vec2.new(1, 1)
@@ -315,14 +324,13 @@ pub const TextureAssetLoaderData = struct {
 
 pub const TextureAssetLoaderError = error{InvalidFormat};
 
-fn textureLoadImage(allocator: *Allocator, path: []const u8, format: []const u8) !Image {
+fn textureLoadImage(allocator: *Allocator, stream: *AssetStream, format: []const u8) !Image {
     if (std.mem.eql(u8, format, "png")) {
-        return try image.png.read(allocator, path);
+        return try image.png.read(allocator, stream.reader());
     } else if (std.mem.eql(u8, format, "bmp")) {
-        return try image.bmp.read(allocator, path);
-    } else {
-        return TextureAssetLoaderError.InvalidFormat;
+        return try image.bmp.read(allocator, stream.reader(), stream.seekableStream());
     }
+    return TextureAssetLoaderError.InvalidFormat;
 }
 
 // struct used to pass data between main thread and worker threads
@@ -330,22 +338,22 @@ const CubemapThreadStruct = struct {
     allocator: *Allocator, path: []const u8, format: []const u8, image: Image
 };
 fn cubemapThread(data: *CubemapThreadStruct) !void {
-    data.image = try textureLoadImage(data.allocator, data.path, data.format);
+    data.image = try nosuspend textureLoadImage(data.allocator, data.path, data.format);
 }
 
 inline fn getTextureFormat(format: image.ImageFormat) c.GLuint {
-    if (format.redMask == 0xFF0000 and format.greenMask == 0xFF00 and format.blueMask == 0xFF and format.bitsSize == 24) {
+    if (std.meta.eql(format, image.ImageFormat.RGB24)) {
         return c.GL_RGB;
-    } else if (format.redMask == 0xFF and format.greenMask == 0xFF00 and format.blueMask == 0xFF0000 and format.bitsSize == 24) {
+    } else if (std.meta.eql(format, image.ImageFormat.BGR24)) {
         return c.GL_BGR;
-    } else if (format.redMask == 0xFF000000 and format.greenMask == 0xFF0000 and format.blueMask == 0xFF00 and format.alphaMask == 0xFF) {
+    } else if (std.meta.eql(format, image.ImageFormat.RGBA32)) {
         return c.GL_RGBA;
     } else {
         unreachable; // TODO convert the source image to RGB
     }
 }
 
-pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
+pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize, stream: *AssetStream) !usize {
     var data = @intToPtr(*TextureAssetLoaderData, dataPtr);
     if (data.cubemap) |cb| {
         var texture = Texture.createEmptyCubemap();
@@ -357,64 +365,38 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize) !usize {
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
             c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
         };
+        const names = [_][]const u8 {"X+", "X-", "Y+", "Y-", "Z+", "Z-"};
 
-        if (@import("builtin").single_threaded) {
-            comptime var i = 0;
-
-            inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
-                const path = @field(cb, field.name);
-                const img = try textureLoadImage(allocator, path, data.format);
-                c.glTexImage2D(targets[i], 0, c.GL_SRGB,
-                    @intCast(c_int, img.width), @intCast(c_int, img.height),
-                    0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
-                img.deinit();
-                i += 1;
-            }
-        } else {
-            var structs: [6]CubemapThreadStruct = undefined;
-            var threads: [6]*Thread = undefined;
-            comptime var i = 0;
-
-            // start loading the textures
-            inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
-                const path = @field(cb, field.name);
-                structs[i] = .{
-                    .allocator = allocator,
-                    .path = path,
-                    .format = data.format,
-                    .image = undefined
-                };
-                threads[i] = try Thread.spawn(&structs[i], cubemapThread);
-                i += 1;
-            }
-
-            // retrieve them
-            var j: usize = 0;
-            while (j < 6) : (j += 1) {
-                threads[j].wait();
-                const img = structs[j].image;
-                c.glTexImage2D(targets[j], 0, c.GL_SRGB,
-                    @intCast(c_int, img.width), @intCast(c_int, img.height),
-                    0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
-                img.deinit();
-            }
+        comptime var i = 0;
+        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
+            const handle = @field(cb, field.name);
+            const tex = try handle.get(Texture, allocator);
+            var tmp = try allocator.alloc(u8, tex.width * tex.height * 3);
+            tex.bind();
+            c.glGetTexImage(c.GL_TEXTURE_2D, 0, c.GL_RGB, c.GL_UNSIGNED_BYTE, tmp.ptr);
+            c.glTexImage2D(targets[i], 0, c.GL_SRGB,
+                @intCast(c_int, tex.width), @intCast(c_int, tex.height),
+                0, c.GL_RGB, c.GL_UNSIGNED_BYTE, tmp.ptr);
+            allocator.free(tmp);
+            i += 1;
         }
         var t = try allocator.create(Texture);
         t.* = texture;
         return @ptrToInt(t);
-    } else if (data.path) |path| {
+    } else {
         var texture = Texture.createEmpty2D();
 
-        var img = try textureLoadImage(allocator, path, data.format);
+        var img = try textureLoadImage(allocator, stream, data.format);
         c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB, @intCast(c_int, img.width), @intCast(c_int, img.height),
             0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
         texture.tiling = data.tiling;
+        texture.width = img.width;
+        texture.height = img.height;
         img.deinit();
+        std.log.scoped(.didot).debug("Loaded texture (format={}, size={}x{})", .{img.format, img.width, img.height});
         var t = try allocator.create(Texture);
         t.* = texture;
         return @ptrToInt(t);
-    } else {
-        return TextureAssetLoaderError.InvalidFormat;
     }
 }
 
@@ -424,6 +406,8 @@ const GameObject = objects.GameObject;
 const Camera = objects.Camera;
 const AssetManager = objects.AssetManager;
 const Asset = objects.Asset;
+const AssetStream = objects.AssetStream;
+const AssetHandle = objects.AssetHandle;
 
 /// Set this function to replace normal pre-render behaviour (GL state, clear, etc.), it happens after viewport
 pub var preRender: ?fn() void = null;
@@ -451,25 +435,16 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
 
     var assets = &scene.assetManager;
     if (scene.camera) |camera| {
-        var projMatrix = switch (camera.projection) {
+        const projMatrix = switch (camera.projection) {
             .Perspective => |p| zlm.Mat4.createPerspective(p.fov, vp.z / vp.w, p.near, p.far),
             .Orthographic => |p| zlm.Mat4.createOrthogonal(p.left, p.right, p.bottom, p.top, p.near, p.far)
         };
-        camera.shader.bind();
-        camera.shader.setUniformMat4("projMatrix", projMatrix);
 
         // create the direction vector to be used with the view matrix.
         const yaw = camera.gameObject.rotation.x;
         const pitch = camera.gameObject.rotation.y;
         const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch)).normalize();
         const viewMatrix = zlm.Mat4.createLookAt(camera.gameObject.position, camera.gameObject.position.add(direction), zlm.Vec3.new(0.0, 1.0, 0.0));
-
-        // const rotMatrix = zlm.Mat4.identity
-        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), camera.gameObject.rotation.y))
-        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), -camera.gameObject.rotation.x))
-        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), 0));
-        //const rotMatrix = zlm.Mat4.createAngleAxis(direction, std.math.pi / 2.0);
-        //const viewMatrix = rotMatrix;
 
         if (scene.skybox) |skybox| {
             if (camera.skyboxShader) |*skyboxShader| {
@@ -482,6 +457,15 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
         }
 
         camera.shader.bind();
+        camera.shader.setUniformMat4("projMatrix", projMatrix);
+
+        // const rotMatrix = zlm.Mat4.identity
+        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), camera.gameObject.rotation.y))
+        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), -camera.gameObject.rotation.x))
+        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), 0));
+        //const rotMatrix = zlm.Mat4.createAngleAxis(direction, std.math.pi / 2.0);
+        //const viewMatrix = rotMatrix;
+
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
         if (scene.pointLight) |light| {
             const lightData = light.findComponent(.PointLight).?.getData(objects.PointLightData);
@@ -500,14 +484,14 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
 }
 
 fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !void {
-    if (skybox.meshPath) |meshPath| {
-        var mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
+    if (skybox.mesh) |handle| {
+        var mesh = try handle.get(Mesh, assets.allocator);
         c.glDepthMask(c.GL_FALSE);
         c.glBindVertexArray(mesh.vao);
         const material = &skybox.material;
 
-        if (material.texturePath) |path| {
-            const texture = @intToPtr(*Texture, (try assets.getExpected(path, .Texture)).?);
+        if (material.texture) |asset| {
+            const texture = try asset.get(Texture, assets.allocator);
             c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
         }
 
@@ -536,13 +520,13 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
         .mul(rotMatrix)
         .mul(zlm.Mat4.createTranslation(gameObject.position))
         .mul(parentMatrix);
-    if (gameObject.meshPath) |meshPath| {
-        const mesh = @intToPtr(*Mesh, (try assets.getExpected(meshPath, .Mesh)).?);
+    if (gameObject.mesh) |handle| {
+        const mesh = try handle.get(Mesh, assets.allocator);
         c.glBindVertexArray(mesh.vao);
         const material = gameObject.material;
 
-        if (material.texturePath) |path| {
-            const texture = @intToPtr(*Texture, (try assets.getExpected(path, .Texture)).?);
+        if (material.texture) |asset| {
+            const texture = try asset.get(Texture, assets.allocator);
             texture.bind();
             camera.shader.setUniformFloat("xTiling", if (texture.tiling.x == 0) 1 else gameObject.scale.x / texture.tiling.x);
             camera.shader.setUniformFloat("yTiling", if (texture.tiling.y == 0) 1 else gameObject.scale.z / texture.tiling.y);
@@ -566,7 +550,17 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
 
     const held = gameObject.treeLock.acquire();
     for (gameObject.childrens.items) |child| {
-        try renderObject(child, assets, camera, matrix);
+        if (std.io.is_async) {
+            var buf = try assets.allocator.alignedAlloc(u8, 16, @frameSize(renderObject));
+            defer assets.allocator.free(buf);
+            var result: anyerror!void = undefined;
+            var f = @asyncCall(buf, &result, renderObject, .{child, assets, camera, matrix});
+            await f catch |err| {
+                std.log.info("{s}", .{@errorName(err)});
+            };
+        } else {
+            try renderObject(child, assets, camera, matrix);
+        }
     }
     held.release();
 }

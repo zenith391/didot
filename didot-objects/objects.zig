@@ -177,7 +177,7 @@ pub fn initPrimitives() void {
 
 pub const GameObject = struct {
     //mesh: ?Mesh = null,
-    meshPath: ?[]const u8 = null,
+    mesh: ?AssetHandle = null,
     name: []const u8 = "Game Object",
     position: zlm.Vec3 = zlm.Vec3.zero,
     /// In order: roll, pitch, yaw. Angles are in radians.
@@ -196,7 +196,7 @@ pub const GameObject = struct {
     objectAllocator: ?*Allocator = null,
     material: Material = Material.default,
     /// Lock used when accesing the game object's tree
-    treeLock: std.Mutex = .{},
+    treeLock: std.Thread.Mutex = .{},
     parent: ?*GameObject = null,
 
     /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
@@ -209,11 +209,11 @@ pub const GameObject = struct {
     }
 
     /// The default kind of game object, it is renderable via its mesh and material.
-    pub fn createObject(allocator: *Allocator, meshPath: []const u8) GameObject {
+    pub fn createObject(allocator: *Allocator, mesh: ?AssetHandle) GameObject {
         var childs = GameObjectArrayList.init(allocator);
         return GameObject {
             .childrens = childs,
-            .meshPath = meshPath,
+            .mesh = mesh,
             .components = ComponentMap.init(allocator)
         };
     }

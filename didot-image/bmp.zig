@@ -8,10 +8,7 @@ const BmpError = error {
     UnsupportedFormat
 };
 
-pub fn read(allocator: *Allocator, path: []const u8) !Image {
-    const file = try std.fs.cwd().openFile(path, .{ .read = true });
-    const reader = file.reader();
-
+pub fn read(allocator: *Allocator, reader: anytype, seekable: anytype) !Image {
     const signature = try reader.readBytesNoEof(2);
     if (!std.mem.eql(u8, &signature, "BM")) {
         return BmpError.UnsupportedFormat;
@@ -35,7 +32,7 @@ pub fn read(allocator: *Allocator, path: []const u8) !Image {
         const colorsNum = try reader.readIntLittle(u32);
         const importantColors = try reader.readIntLittle(u32);
 
-        try file.seekTo(offset);
+        try seekable.seekTo(offset);
         const imgReader = (std.io.BufferedReader(16*1024, @TypeOf(reader)) { 
             .unbuffered_reader = reader
         }).reader(); // the input is only buffered now as when seeking the file, the buffer isn't emptied

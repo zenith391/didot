@@ -13,11 +13,12 @@ pub const EngineConfig = struct {
     /// Currently, didot-x11 will be used for Linux and didot-glfw for other platforms.
     autoWindow: bool = true,
     /// Whether or not to include the physics module
-    usePhysics: bool = false
+    usePhysics: bool = false,
+    embedAssets: bool = false,
 };
 
 pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void {
-    var allocator = step.builder.allocator;
+    const allocator = step.builder.allocator;
     const prefix = config.prefix;
 
     const zlm = Pkg {
@@ -60,10 +61,49 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         .dependencies = &[_]Pkg{zlm,graphics}
     };
 
+    const b = step.builder;
+    const assetDep = Pkg {
+        .name = "didot-assets-embed",
+        .path = try std.mem.concat(allocator, u8, &[_][]const u8 {b.build_root, "/", b.cache_root, "/assets/", step.name, ".zig"})
+    };
+    var objDep: [5]Pkg = .{zlm,graphics,models,image,undefined};
+    if (config.embedAssets) {
+        objDep[4] = assetDep;
+        var dir = try std.fs.openDirAbsolute(b.build_root, .{});
+        defer dir.close();
+
+        var cacheDir = try dir.openDir(b.cache_root, .{});
+        var assetCacheDir = try cacheDir.makeOpenPath("assets", .{});
+        defer assetCacheDir.close();
+        cacheDir.close();
+
+        const fullName = try std.mem.concat(allocator, u8, &[_][]const u8 {step.name, ".zig"});
+        const cacheFile = try assetCacheDir.createFile(fullName, .{ .truncate = true });
+        defer cacheFile.close();
+        allocator.free(fullName);
+        const writer = cacheFile.writer();
+
+        const dirPath = try dir.realpathAlloc(allocator, "assets");
+        defer allocator.free(dirPath);
+
+        var walker = try std.fs.walkPath(allocator, dirPath);
+        defer walker.deinit();
+        while (try walker.next()) |entry| {
+            if (entry.kind == .File) {
+                const rel = entry.path[dirPath.len+1..];
+                const file = try entry.dir.openFile(entry.basename, .{});
+                defer file.close();
+                const text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+                try writer.print("pub const @\"{s}\" = @embedFile(\"{s}\");\n", .{rel, entry.path});
+                allocator.free(text);
+            }
+        }
+    }
+
     const objects = Pkg {
         .name = "didot-objects",
         .path = prefix ++ "didot-objects/objects.zig",
-        .dependencies = &[_]Pkg{zlm,graphics}
+        .dependencies = if (config.embedAssets) &objDep else objDep[0..4]
     };
 
     const physics = Pkg {
@@ -75,6 +115,8 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         try @import(prefix ++ config.physicsModule ++ "/build.zig").build(step);
         step.addPackage(physics);
     }
+
+
 
     const app = Pkg {
         .name = "didot-app",
@@ -89,6 +131,45 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     step.addPackage(objects);
     step.addPackage(models);
     step.addPackage(app);
+}
+
+fn embedAssets(step: *LibExeObjStep) !void {
+    const b = step.builder;
+    const allocator = b.allocator;
+    var dir = try std.fs.openDirAbsolute(b.build_root, .{});
+    defer dir.close();
+
+    var cacheDir = try dir.openDir(b.cache_root, .{});
+    var assetCacheDir = try cacheDir.makeOpenPath("assets", .{});
+    defer assetCacheDir.close();
+    cacheDir.close();
+
+    const fullName = try std.mem.concat(allocator, u8, &[_][]const u8 {step.name, ".zig"});
+    const cacheFile = try assetCacheDir.createFile(fullName, .{ .truncate = true });
+    defer cacheFile.close();
+    allocator.free(fullName);
+    const writer = cacheFile.writer();
+
+    const dirPath = try dir.realpathAlloc(allocator, "assets");
+    defer allocator.free(dirPath);
+
+    var walker = try std.fs.walkPath(allocator, dirPath);
+    defer walker.deinit();
+    while (try walker.next()) |entry| {
+        if (entry.kind == .File) {
+            const rel = entry.path[dirPath.len+1..];
+            const file = try entry.dir.openFile(entry.basename, .{});
+            defer file.close();
+            const text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+            try writer.print("pub const @\"{s}\" = @embedFile(\"{s}\");\n", .{rel, entry.path});
+            allocator.free(text);
+        }
+    }
+
+    step.addPackage(Pkg {
+        .name = "didot-assets-embed",
+        .path = try std.mem.concat(allocator, u8, &[_][]const u8 {b.build_root, "/", b.cache_root, "/assets/", step.name, ".zig"})
+    });
 }
 
 pub fn build(b: *Builder) !void {
@@ -121,7 +202,8 @@ pub fn build(b: *Builder) !void {
     const engineConfig = EngineConfig {
         .windowModule = "didot-glfw",
         .autoWindow = false,
-        .usePhysics = true
+        .usePhysics = true,
+        .embedAssets = true
     };
 
     inline for (examples) |example| {
@@ -132,6 +214,7 @@ pub fn build(b: *Builder) !void {
         exe.setTarget(target);
         exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
         try addEngineToExe(exe, engineConfig);
+        try embedAssets(exe);
         exe.single_threaded = stripExample;
         exe.strip = stripExample;
         exe.install();

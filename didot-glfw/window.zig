@@ -10,6 +10,8 @@ const std = @import("std");
 const zlm = @import("zlm");
 const Vec2 = zlm.Vec2;
 
+var mainWindow: ?*Window = null;
+
 // TODO: more inputs and a more efficient way to do them
 
 pub const Input = struct {
@@ -264,10 +266,15 @@ pub const Window = struct {
         return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
     }
 
+    pub inline fn makeContextCurrent(self: *Window) void {
+        c.glfwMakeContextCurrent(self.nativeId);
+    }
+
     /// Poll events, swap buffer and update input.
     /// Returns false if the window should be closed and true otherwises.
     pub fn update(self: *Window) bool {
-        c.glfwMakeContextCurrent(self.nativeId);
+        mainWindow = self;
+        self.makeContextCurrent();
         c.glfwSwapBuffers(self.nativeId);
         c.glfwPollEvents();
         self.input.update();
@@ -279,6 +286,19 @@ pub const Window = struct {
     }
 
 };
+
+var ctxLock: std.Thread.Mutex = .{};
+
+/// Ensure the GL (or any other API) context is correctly set.
+/// This method should be called after and inside anything that is async.
+pub fn windowContextLock() @TypeOf(ctxLock.impl).Held {
+    if (mainWindow) |win| {
+        win.makeContextCurrent();
+    } else {
+        std.log.scoped(.didot).warn("Could not switch context, no main window!", .{});
+    }
+    return ctxLock.acquire();
+}
 
 comptime {
     std.testing.refAllDecls(Window);

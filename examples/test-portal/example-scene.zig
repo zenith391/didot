@@ -134,8 +134,8 @@ fn init(allocator: *Allocator, app: *App) !void {
     const scene = app.scene;
     const asset = &scene.assetManager;
 
-    //try asset.autoLoad(allocator);
-    try asset.comptimeAutoLoad(allocator);
+    try asset.autoLoad(allocator);
+    //try asset.comptimeAutoLoad(allocator);
 
     // try asset.put("Texture/Concrete", try TextureAsset.init(allocator, .{
     //     .path = "assets/textures/grass.png", .format = "png",

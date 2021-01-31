@@ -188,12 +188,16 @@ pub const AssetHandle = struct {
     manager: *AssetManager,
     key: []const u8,
 
-    pub fn get(self: *const AssetHandle, comptime T: type, allocator: *Allocator) !*T {
+    pub fn getPointer(self: *const AssetHandle, allocator: *Allocator) anyerror!usize {
         const asset = self.manager.getAsset(self.key).?;
         if (asset.objectPtr == 0) {
             std.log.scoped(.didot).debug("Load asset {s}", .{self.key});
         }
-        return @intToPtr(*T, try asset.getPointer(allocator));
+        return try asset.getPointer(allocator);
+    }
+
+    pub fn get(self: *const AssetHandle, comptime T: type, allocator: *Allocator) !*T {
+        return @intToPtr(*T, try self.getPointer(allocator));
     }
 };
 
@@ -316,7 +320,6 @@ pub const AssetManager = struct {
                 //try self.autoLoadDir(allocator, path, &d);
             } else if (entry.kind == .File) {
                 const rel = entry.path[dirPath.len+1..];
-                std.log.info("{s}", .{rel});
                 const ext = std.fs.path.extension(entry.basename);
 
                 var asset: ?Asset = null;

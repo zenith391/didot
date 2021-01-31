@@ -71,51 +71,42 @@ const IHDR = struct {
     interlaceMethod: u8
 };
 
-fn filterNone(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
+fn filterNone(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
     return sample;
 }
 
-fn filterSub(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
-    if (x < bytes) {
-        return sample;
-    } else {
-        return sample +% image[pos-bytes];
-    }
+fn filterSub(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+    return if (x < bytes) sample else sample +% image[pos-bytes];
 }
 
-fn filterUp(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
-    if (y == 0) {
-        return sample;
-    } else {
-        return sample +% image[pos-width];
-    }
+fn filterUp(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+    return if (y == 0) sample else sample +% image[pos-width];
 }
 
-fn filterAverage(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
-    var val: u16 = if (x >= bytes) image[pos-bytes] else 0; // val = a
+fn filterAverage(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+    var val: u9 = if (x >= bytes) image[pos-bytes] else 0;
     if (y > 0) {
         val += image[pos-width]; // val = a + b
     }
-    return sample +% @intCast(u8, val / 2);
+    return sample +% @truncate(u8, val / 2);
 }
 
-fn filterPaeth(image: []const u8, sample: u8, x: usize, y: usize, width: usize, pos: usize, bytes: u8) u8 {
-    const a: i32 = if (x >= bytes) image[pos-bytes] else 0;
-    const b: i32 = if (y > 0) image[pos-width] else 0;
-    const c: i32 = if (x >= bytes and y > 0) image[pos-width-bytes] else 0;
-
-    const p: i32 = a + b - c;
-    // the minimum value of p is -255, minus the minimum value of a/b/c, the minimum result is -510, so using unreachable is safe
+fn filterPaeth(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+    const a: i10 = if (x >= bytes) image[pos-bytes] else 0;
+    const b: i10 = if (y > 0) image[pos-width] else 0;
+    const c: i10 = if (x >= bytes and y > 0) image[pos-width-bytes] else 0;
+    const p: i10 = a + b - c;
+    // the minimum value of p is -255, minus the maximum value of a/b/c, the minimum result is -510, so using unreachable is safe
     const pa = std.math.absInt(p - a) catch unreachable;
     const pb = std.math.absInt(p - b) catch unreachable;
     const pc = std.math.absInt(p - c) catch unreachable;
 
     if (pa <= pb and pa <= pc) {
-        return sample +% @intCast(u8, a);
+        return sample +% @truncate(u8, @bitCast(u10, a));
     } else if (pb <= pc) {
-        return sample +% @intCast(u8, b);
+        return sample +% @truncate(u8, @bitCast(u10, b));
     } else {
-        return sample +% @intCast(u8, c);
+        return sample +% @truncate(u8, @bitCast(u10, c));
     }
 }
 
@@ -192,7 +183,7 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
     var zlibStream = try std.compress.zlib.zlibStream(allocator, idatStream.reader());
     defer zlibStream.deinit();
     var zlibReader = zlibStream.reader();
-    const idatReader = (std.io.BufferedReader(16*1024, @TypeOf(zlibReader)) { 
+    const idatReader = (std.io.BufferedReader(64*1024, @TypeOf(zlibReader)) { 
         .unbuffered_reader = zlibReader
     }).reader();
 
@@ -202,32 +193,37 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
         bpp = 4;
     }
     const imageData = try allocator.alloc(u8, ihdr.width*ihdr.height*bpp);
-    var x: u32 = 0;
-        var y: u32 = 0;
+    var y: u32 = 0;
+
+    const Filter = fn(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8;
+    const filters = [_]Filter {filterNone, filterSub, filterUp, filterAverage, filterPaeth};
 
     if (ihdr.colorType == .Truecolor) {
-        var pixel: [3]u8 = undefined;
-        const bytesPerLine = ihdr.width * 3;
+        const bytesPerLine = ihdr.width * bpp;
+        var line = try allocator.alloc(u8, bytesPerLine);
+        defer allocator.free(line);
         while (y < ihdr.height) {
-            x = 0;
+            var x: u32 = 0;
             // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
             const filterType = try idatReader.readByte();
-            const filter = switch (filterType) {
-                0 => filterNone,
-                1 => filterSub,
-                2 => filterUp,
-                3 => filterAverage,
-                4 => filterPaeth,
-                else => return error.InvalidFilter
-            };
-            while (x < bytesPerLine) {
-                const pos = y*bytesPerLine + x;
-                _ = try idatReader.readAll(&pixel);
-                imageData[pos] = filter(imageData, pixel[0], x, y, bytesPerLine, pos, 3);
-                imageData[pos+1] = filter(imageData, pixel[1], x+1, y, bytesPerLine, pos+1, 3);
-                imageData[pos+2] = filter(imageData, pixel[2], x+2, y, bytesPerLine, pos+2, 3);
-                x += 3; // since we use 3 bytes per pixel, let's directly increment X by 3
-                // (that optimisation is also useful in the filter method)
+            const offset = y*bytesPerLine;
+            _ = try idatReader.readAll(line);
+
+            inline for (filters) |filter, i| {
+                if (filterType == i) {
+                    while (x < bytesPerLine) {
+                        const pos = offset + x;
+                        imageData[pos] = filter(imageData, line[x], x, y, bytesPerLine, pos, 3);
+                        x += 1;
+                        imageData[pos+1] = filter(imageData, line[x], x, y, bytesPerLine, pos+1, 3);
+                        x += 1;
+                        imageData[pos+2] = filter(imageData, line[x], x, y, bytesPerLine, pos+2, 3);
+                        x += 1;
+                    }
+                }
+            }
+            if (std.debug.runtime_safety and x != bytesPerLine) {
+                return error.InvalidFilter;
             }
             y += 1;
         }
@@ -239,11 +235,11 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
             .height = ihdr.height,
             .format = @import("image.zig").ImageFormat.RGB24
         };
-    } else if (ihdr.colorType == .TruecolorAlpha) {
+    } else if (ihdr.colorType == .TruecolorAlpha and false) {
         var pixel: [4]u8 = undefined;
         const bytesPerLine = ihdr.width * 4;
         while (y < ihdr.height) {
-            x = 0;
+            var x: u32 = 0;
             // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
             const filterType = try idatReader.readByte();
             const filter = switch (filterType) {
@@ -274,7 +270,7 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
             .height = ihdr.height,
             .format = @import("image.zig").ImageFormat.RGBA32
         };
-        } else {
+    } else {
         std.log.scoped(.didot).err("Unsupported PNG format: {}", .{ihdr.colorType});
         return PngError.UnsupportedFormat;
     }

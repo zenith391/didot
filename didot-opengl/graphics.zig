@@ -101,6 +101,9 @@ pub const ShaderProgram = struct {
     }
 
     pub fn create(allocator: *Allocator, vert: [:0]const u8, frag: [:0]const u8) !ShaderProgram {
+        const held = windowContextLock();
+        defer held.release();
+
         const vertexShader = c.glCreateShader(c.GL_VERTEX_SHADER);
         var v = try std.fmt.allocPrintZ(allocator, "{s}", .{vert});
         c.glShaderSource(vertexShader, 1, &v, null);
@@ -160,7 +163,7 @@ pub const ShaderProgram = struct {
             if (location == -1) {
                 std.log.scoped(.didot).warn("Shader uniform not found: {s}", .{name});
             } else {
-                std.log.scoped(.didot).debug("Uniform location of {s} is {}", .{name, location});
+                //std.log.scoped(.didot).debug("Uniform location of {s} is {}", .{name, location});
             }
             self.uniformLocations.put(name, location) catch {}; // as this is a cache, not being able to put the entry can be and should be discarded
             return location;
@@ -356,37 +359,51 @@ inline fn getTextureFormat(format: image.ImageFormat) c.GLuint {
 pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize, stream: *AssetStream) !usize {
     var data = @intToPtr(*TextureAssetLoaderData, dataPtr);
     if (data.cubemap) |cb| {
+        const texHeld = windowContextLock();
         var texture = Texture.createEmptyCubemap();
+        texHeld.release();
+
         const targets = [_]c.GLuint {
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_X,
             c.GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_Y,
             c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,
             c.GL_TEXTURE_CUBE_MAP_POSITIVE_Z,
-            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z,
+            c.GL_TEXTURE_CUBE_MAP_NEGATIVE_Z
         };
         const names = [_][]const u8 {"X+", "X-", "Y+", "Y-", "Z+", "Z-"};
-
+        var frames: [6]@Frame(AssetHandle.getPointer) = undefined;
         comptime var i = 0;
         inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
             const handle = @field(cb, field.name);
-            const tex = try handle.get(Texture, allocator);
+            frames[i] = async handle.getPointer(allocator);
+            i += 1;
+        }
+
+        i = 0;
+        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
+            const ptr = try await frames[i];
+            const tex = @intToPtr(*Texture, ptr);
             var tmp = try allocator.alloc(u8, tex.width * tex.height * 3);
+            const held = windowContextLock();
             tex.bind();
             c.glGetTexImage(c.GL_TEXTURE_2D, 0, c.GL_RGB, c.GL_UNSIGNED_BYTE, tmp.ptr);
             c.glTexImage2D(targets[i], 0, c.GL_SRGB,
                 @intCast(c_int, tex.width), @intCast(c_int, tex.height),
                 0, c.GL_RGB, c.GL_UNSIGNED_BYTE, tmp.ptr);
             allocator.free(tmp);
+            held.release();
+            std.log.scoped(.didot).debug("Loaded cubemap {s}", .{names[i]});
             i += 1;
         }
         var t = try allocator.create(Texture);
         t.* = texture;
         return @ptrToInt(t);
     } else {
-        var texture = Texture.createEmpty2D();
-
         var img = try textureLoadImage(allocator, stream, data.format);
+        const held = windowContextLock();
+        var texture = Texture.createEmpty2D();
+        defer held.release();
         c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB, @intCast(c_int, img.width), @intCast(c_int, img.height),
             0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
         texture.tiling = data.tiling;
@@ -419,9 +436,13 @@ pub fn renderScene(scene: *Scene, window: Window) !void {
     try renderSceneOffscreen(scene, if (viewport) |func| func() else zlm.vec4(0, 0, size.x, size.y));
 }
 
+var renderHeld: @typeInfo(@TypeOf(std.Thread.Mutex.acquire)).Fn.return_type.? = undefined;
+
 /// Internal method for rendering a game scene.
 /// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)
 pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
+    renderHeld = windowContextLock();
+    defer renderHeld.release();
     c.glViewport(@floatToInt(c_int, @floor(vp.x)), @floatToInt(c_int, @floor(vp.y)),
         @floatToInt(c_int, @floor(vp.z)), @floatToInt(c_int, @floor(vp.w)));
     if (preRender) |func| {
@@ -491,7 +512,9 @@ fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !vo
         const material = &skybox.material;
 
         if (material.texture) |asset| {
+            renderHeld.release();
             const texture = try asset.get(Texture, assets.allocator);
+            renderHeld = windowContextLock();
             c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
         }
 
@@ -521,12 +544,16 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
         .mul(zlm.Mat4.createTranslation(gameObject.position))
         .mul(parentMatrix);
     if (gameObject.mesh) |handle| {
+        renderHeld.release();
         const mesh = try handle.get(Mesh, assets.allocator);
+        renderHeld = windowContextLock();
         c.glBindVertexArray(mesh.vao);
         const material = gameObject.material;
 
         if (material.texture) |asset| {
+            renderHeld.release();
             const texture = try asset.get(Texture, assets.allocator);
+            renderHeld = windowContextLock();
             texture.bind();
             camera.shader.setUniformFloat("xTiling", if (texture.tiling.x == 0) 1 else gameObject.scale.x / texture.tiling.x);
             camera.shader.setUniformFloat("yTiling", if (texture.tiling.y == 0) 1 else gameObject.scale.z / texture.tiling.y);

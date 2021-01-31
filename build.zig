@@ -94,7 +94,7 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
                 const file = try entry.dir.openFile(entry.basename, .{});
                 defer file.close();
                 const text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-                try writer.print("pub const @\"{s}\" = @embedFile(\"{s}\");\n", .{rel, entry.path});
+                try writer.print("pub const @\"{s}\" = @embedFile(\"{s}\");\n", .{rel, entry.path}); // TODO: maybe use comptime to compress
                 allocator.free(text);
             }
         }

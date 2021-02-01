@@ -176,15 +176,9 @@ pub fn initPrimitives() void {
 }
 
 pub const GameObject = struct {
-    //mesh: ?Mesh = null,
+    // TODO: change to a Renderer component
     mesh: ?AssetHandle = null,
     name: []const u8 = "Game Object",
-    position: zlm.Vec3 = zlm.Vec3.zero,
-    /// In order: roll, pitch, yaw. Angles are in radians.
-    /// Note: this will be replaced with quaternions very soon!
-    rotation: zlm.Vec3 = zlm.Vec3.zero,
-    scale: zlm.Vec3 = zlm.Vec3.one,
-    childrens: GameObjectArrayList,
     components: ComponentMap,
 
     /// Type of object owning this game object ("camera", "scene", etc.)
@@ -195,138 +189,107 @@ pub const GameObject = struct {
     /// The allocator used to create objectPointer, if any.
     objectAllocator: ?*Allocator = null,
     material: Material = Material.default,
-    /// Lock used when accesing the game object's tree
-    treeLock: std.Thread.Mutex = .{},
-    parent: ?*GameObject = null,
 
     /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
     pub fn createEmpty(allocator: *Allocator) GameObject {
-        var childs = GameObjectArrayList.init(allocator);
         return GameObject {
-            .childrens = childs,
             .components = ComponentMap.init(allocator)
         };
     }
 
     /// The default kind of game object, it is renderable via its mesh and material.
-    pub fn createObject(allocator: *Allocator, mesh: ?AssetHandle) GameObject {
-        var childs = GameObjectArrayList.init(allocator);
-        return GameObject {
-            .childrens = childs,
+    pub fn createObject(allocator: *Allocator, mesh: ?AssetHandle) !GameObject {
+        var gameObject = GameObject {
             .mesh = mesh,
             .components = ComponentMap.init(allocator)
         };
+        try gameObject.addComponent(Transform {});
+        if (mesh != null) {
+            // TODO: add Renderer
+        }
+        return gameObject;
     }
 
+    // TODO: remove
     /// For cameras, scenes, etc.
-    pub fn createCustom(allocator: *Allocator, customType: []const u8, ptr: usize) GameObject {
-        var childs = GameObjectArrayList.init(allocator);
-        return GameObject {
-            .childrens = childs,
+    pub fn createCustom(allocator: *Allocator, customType: []const u8, ptr: usize) !GameObject {
+        var gameObject = GameObject {
             .objectType = customType,
             .objectPointer = ptr,
             .objectAllocator = allocator,
             .components = ComponentMap.init(allocator)
         };
+        try gameObject.addComponent(Transform {});
+        return gameObject;
     }
 
     pub fn update(self: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
         var iterator = self.components.iterator();
         while (iterator.next()) |entry| {
             var component = &entry.value;
-            component.gameObject = self;
-            try component.update(allocator, delta);
-        }
-
-        // The length is set in advance to avoid problems when adding a game object while updating
-        const len = self.childrens.items.len;
-        var copy = self.childrens;
-        var i: usize = 0;
-        while (i < len) : (i += 1) {
-            const child = self.childrens.items[i];
-            child.parent = self;
-            try child.update(allocator, delta); // TODO: correctly handle errors
+            //try component.update(allocator, delta);
         }
     }
 
-    pub fn findChild(self: *GameObject, name: []const u8) ?*GameObject {
-        const held = self.treeLock.acquire();
-        defer held.release();
-        for (self.childrens.items) |child| {
-            if (std.mem.eql(u8, child.name, name)) return child;
-        }
-        return null;
-    }
-
-    pub fn findComponent(self: *const GameObject, comptime name: @Type(.EnumLiteral)) ?*Component {
-        if (self.components.get(@tagName(name))) |*cp| {
-            return cp;
+    pub fn getComponent(self: *const GameObject, comptime T: type) ?*T {
+        if (self.components.get(@typeName(T))) |cp| {
+            return @intToPtr(*T, cp.data);
         } else {
             return null;
         }
     }
 
-    pub fn hasComponent(self: *const GameObject, comptime name: @Type(.EnumLiteral)) bool {
-        return self.findComponent(name) != null;
+    pub fn hasComponent(self: *const GameObject, comptime T: type) bool {
+        return self.getComponent(T) != null;
     }
 
-    /// This functions returns the forward (the direction) vector of this game object using its rotation.
-    pub fn getForward(self: *const GameObject) zlm.Vec3 {
-        const rot = self.rotation;
-        return zlm.Vec3.new(
-            std.math.cos(rot.x) * std.math.cos(rot.y),
-            std.math.sin(rot.y),
-            std.math.sin(rot.x) * std.math.cos(rot.y)
-        );
+    pub fn addComponent(self: *GameObject, component: anytype) !void {
+        const wrapper = try Component.from(self.components.allocator, component);
+        try self.components.put(wrapper.name, wrapper);
     }
 
-    /// This functions returns the left vector of this game object using its rotation.
-    pub fn getLeft(self: *const GameObject) zlm.Vec3 {
-        const rot = self.rotation;
-        return zlm.Vec3.new(
-            -std.math.sin(rot.x),
-            0,
-            std.math.cos(rot.x)
-        );
-    }
+    // TODO: move to Transform component (which will also include hierarchy)
 
-    pub fn look(self: *GameObject, direction: zlm.Vec3, up: zlm.Vec3) void {
-        // self.rotation.x = ((std.math.cos(direction.z)) * (std.math.cos(direction.x)) +1)* std.math.pi;
-        // self.rotation.y = (std.math.cos(direction.y) + 1) * std.math.pi;
-        // self.rotation.z = 0;
-        // const mat = zlm.Mat4.createLook(self.position, direction, up);
-        // self.rotation = mat.mulVec3(zlm.Vec3.new(0, 0, 1));
-        // self.rotation.x = (self.rotation.x * self.rotation.z) * std.math.pi;
-        // self.rotation.y = 0;
-        // self.rotation.z = 0;
+    // pub fn findChild(self: *GameObject, name: []const u8) ?*GameObject {
+    //     const held = self.treeLock.acquire();
+    //     defer held.release();
+    //     for (self.childrens.items) |child| {
+    //         if (std.mem.eql(u8, child.name, name)) return child;
+    //     }
+    //     return null;
+    // }
 
-        var angle = std.math.atan2(f32, direction.y, direction.x);
+    // pub fn look(self: *GameObject, direction: zlm.Vec3, up: zlm.Vec3) void {
+    //     // self.rotation.x = ((std.math.cos(direction.z)) * (std.math.cos(direction.x)) +1)* std.math.pi;
+    //     // self.rotation.y = (std.math.cos(direction.y) + 1) * std.math.pi;
+    //     // self.rotation.z = 0;
+    //     // const mat = zlm.Mat4.createLook(self.position, direction, up);
+    //     // self.rotation = mat.mulVec3(zlm.Vec3.new(0, 0, 1));
+    //     // self.rotation.x = (self.rotation.x * self.rotation.z) * std.math.pi;
+    //     // self.rotation.y = 0;
+    //     // self.rotation.z = 0;
+
+    //     var angle = std.math.atan2(f32, direction.y, direction.x);
         
-    }
+    // }
 
-    pub fn lookAt(self: *GameObject, target: zlm.Vec3, up: zlm.Vec3) void {
-        self.look(target.sub(self.position).normalize(), up);
-    }
+    // pub fn lookAt(self: *GameObject, target: zlm.Vec3, up: zlm.Vec3) void {
+    //     self.look(target.sub(self.position).normalize(), up);
+    // }
 
-    /// Add a game object as children to this game object.
-    pub fn add(self: *GameObject, go: GameObject) !void {
-        const held = self.treeLock.acquire();
-        defer held.release();
+
+    // pub fn add(self: *GameObject, go: GameObject) !void {
+    //     const held = self.treeLock.acquire();
+    //     defer held.release();
         
-        var gameObject = try self.childrens.allocator.create(GameObject);
-        gameObject.* = go;
-        gameObject.parent = self;
-        try self.childrens.append(gameObject);
-    }
-
-    pub fn addComponent(self: *GameObject, cp: Component) !void {
-        try self.components.put(cp.getName(), cp);
-    }
+    //     var gameObject = try self.childrens.allocator.create(GameObject);
+    //     gameObject.* = go;
+    //     gameObject.parent = self;
+    //     try self.childrens.append(gameObject);
+    // }
 
     /// Frees childrens array list (not childrens themselves!), the object associated to it and itself.
     pub fn deinit(self: *GameObject) void {
-        const allocator = self.childrens.allocator;
-        self.childrens.deinit();
         var iterator = self.components.iterator();
         while (iterator.next()) |entry| {
             var component = &entry.value;
@@ -335,24 +298,11 @@ pub const GameObject = struct {
         self.components.deinit();
         const objectAllocator = self.objectAllocator;
         const objectPointer = self.objectPointer;
-        if (self.parent != null) {
-            allocator.destroy(self);
-        }
         if (objectAllocator) |alloc| {
             if (objectPointer != 0) {
                 alloc.destroy(@intToPtr(*u8, objectPointer));
             }
         }
-    }
-
-    /// De-init the game object and its children (recursive deinit)
-    pub fn deinitAll(self: *GameObject) void {
-        const held = self.treeLock.acquire();
-        for (self.childrens.items) |child| {
-            child.deinitAll();
-        }
-        held.release();
-        self.deinit();
     }
 };
 
@@ -383,8 +333,8 @@ pub const Camera = struct {
     /// Memory is caller-owned (de-init must be called before)
     pub fn create(allocator: *Allocator, shader: graphics.ShaderProgram) !*Camera {
         var camera = try allocator.create(Camera);
-        var go = GameObject.createCustom(allocator, "camera", @ptrToInt(camera));
-        go.rotation = zlm.Vec3.new(zlm.toRadians(-90.0), 0, 0);
+        var go = try GameObject.createCustom(allocator, "camera", @ptrToInt(camera));
+        go.getComponent(Transform).?.rotation = zlm.Vec3.new(zlm.toRadians(-90.0), 0, 0);
         camera.gameObject = go;
         camera.shader = shader;
         camera.projection = .{
@@ -398,7 +348,9 @@ pub const Camera = struct {
     }
 };
 
-pub const PointLightData = struct {
+/// Point light component.
+/// Add it to a GameObject for it to emit point light.
+pub const PointLight = struct {
     /// The color emitted by the light
     color: graphics.Color = graphics.Color.one,
     /// Constant attenuation (the higher it is, the darker the light is)
@@ -409,14 +361,40 @@ pub const PointLightData = struct {
     quadratic: f32 = 0.016
 };
 
-/// Point light component.
-/// Add it to a GameObject for it to emit point light.
-pub const PointLight = ComponentType(.PointLight, PointLightData, .{}) {};
+pub const Transform = struct {
+    position: zlm.Vec3 = zlm.Vec3.zero,
+    /// In order: roll, pitch, yaw. Angles are in radians.
+    /// Note: this will be replaced with quaternions very soon!
+    rotation: zlm.Vec3 = zlm.Vec3.zero,
+    scale: zlm.Vec3 = zlm.Vec3.one,
+    parent: ?*Transform = null,
 
-pub const Renderer2D = ComponentType(.Renderer2D, struct {}, .{}) {};
+    /// This functions returns the forward (the direction) vector of this game object using its rotation.
+    pub fn getForward(self: *const Transform) zlm.Vec3 {
+        const rot = self.rotation;
+        return zlm.Vec3.new(
+            std.math.cos(rot.x) * std.math.cos(rot.y),
+            std.math.sin(rot.y),
+            std.math.sin(rot.x) * std.math.cos(rot.y)
+        );
+    }
+
+    /// This functions returns the left vector of this game object using its rotation.
+    pub fn getLeft(self: *const Transform) zlm.Vec3 {
+        const rot = self.rotation;
+        return zlm.Vec3.new(
+            -std.math.sin(rot.x),
+            0,
+            std.math.cos(rot.x)
+        );
+    }
+};
+
+//pub const Renderer2D = ComponentType(.Renderer2D, struct {}, .{}) {};
 
 pub const Scene = struct {
     gameObject: GameObject,
+    objects: GameObjectArrayList,
     /// The camera the scene is currently using.
     /// It is auto-detected at runtime before each render by looking
     /// on top-level game objects to select one that corresponds
@@ -430,11 +408,15 @@ pub const Scene = struct {
     pointLight: ?*GameObject,
     assetManager: AssetManager,
     allocator: *Allocator,
+    /// Lock used when accesing the game object's tree
+    treeLock: std.Thread.Mutex = .{},
 
     pub fn create(allocator: *Allocator, assetManager: ?AssetManager) !*Scene {
         var scene = try allocator.create(Scene);
         scene.gameObject = GameObject.createEmpty(allocator);
         scene.allocator = allocator;
+        scene.treeLock = .{};
+        scene.objects = GameObjectArrayList.init(allocator);
         if (assetManager) |mg| {
             scene.assetManager = mg;
         } else {
@@ -458,14 +440,14 @@ pub const Scene = struct {
     }
 
     fn renderCommon(self: *Scene) void {
-        var childs: GameObjectArrayList = self.gameObject.childrens;
+        var childs: GameObjectArrayList = self.objects;
 
         // TODO: only do this when a new child is inserted
         self.camera = null;
         self.skybox = null;
         self.pointLight = null;
 
-        var held = self.gameObject.treeLock.acquire();
+        var held = self.treeLock.acquire();
         for (childs.items) |child| {
             if (child.objectType) |objectType| {
                 if (std.mem.eql(u8, objectType, "camera")) {
@@ -479,7 +461,7 @@ pub const Scene = struct {
                     self.skybox = child;
                 }
             }
-            if (child.hasComponent(.PointLight)) {
+            if (child.hasComponent(PointLight)) {
                 self.pointLight = child;
             }
         }
@@ -497,22 +479,42 @@ pub const Scene = struct {
     }
 
     pub fn add(self: *Scene, go: GameObject) !void {
-        try self.gameObject.add(go);
+        const held = self.treeLock.acquire();
+        defer held.release();
+        
+        var gameObject = try self.objects.allocator.create(GameObject);
+        gameObject.* = go;
+        try self.objects.append(gameObject);
     }
 
-    pub fn findChild(self: *const Scene, name: []const u8) ?*GameObject {
-        return self.gameObject.findChild(name);
+    pub fn findChild(self: *Scene, name: []const u8) ?*GameObject {
+        const held = self.treeLock.acquire();
+        defer held.release();
+        for (self.objects.items) |child| {
+            if (std.mem.eql(u8, child.name, name)) return child;
+        }
+        return null;
     }
 
     pub fn deinit(self: *Scene) void {
         self.assetManager.deinit();
-        self.gameObject.deinit();
+        //self.gameObject.deinit();
+        for (self.objects.items) |child| {
+            child.deinit();
+            self.objects.allocator.destroy(child);
+        }
+        self.objects.deinit();
         self.allocator.destroy(self);
     }
 
     pub fn deinitAll(self: *Scene) void {
         self.assetManager.deinit();
-        self.gameObject.deinitAll();
+        //self.gameObject.deinitAll();
+        for (self.objects.items) |child| {
+            child.deinit();
+            self.objects.allocator.destroy(child);
+        }
+        self.objects.deinit();
         self.allocator.destroy(self);
     }
 };

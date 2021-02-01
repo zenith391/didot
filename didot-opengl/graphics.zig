@@ -462,10 +462,11 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
         };
 
         // create the direction vector to be used with the view matrix.
-        const yaw = camera.gameObject.rotation.x;
-        const pitch = camera.gameObject.rotation.y;
+        const transform = camera.gameObject.getComponent(objects.Transform).?;
+        const yaw = transform.rotation.x;
+        const pitch = transform.rotation.y;
         const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch)).normalize();
-        const viewMatrix = zlm.Mat4.createLookAt(camera.gameObject.position, camera.gameObject.position.add(direction), zlm.Vec3.new(0.0, 1.0, 0.0));
+        const viewMatrix = zlm.Mat4.createLookAt(transform.position, transform.position.add(direction), zlm.Vec3.new(0.0, 1.0, 0.0));
 
         if (scene.skybox) |skybox| {
             if (camera.skyboxShader) |*skyboxShader| {
@@ -489,8 +490,8 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
 
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
         if (scene.pointLight) |light| {
-            const lightData = light.findComponent(.PointLight).?.getData(objects.PointLightData);
-            camera.shader.setUniformVec3("light.position", light.position);
+            const lightData = light.getComponent(objects.PointLight).?;
+            camera.shader.setUniformVec3("light.position", light.getComponent(objects.Transform).?.position);
             camera.shader.setUniformVec3("light.color", lightData.color);
             camera.shader.setUniformFloat("light.constant", lightData.constant);
             camera.shader.setUniformFloat("light.linear", lightData.linear);
@@ -499,8 +500,13 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
         } else {
             camera.shader.setUniformBool("useLight", false);
         }
-        camera.shader.setUniformVec3("viewPos", camera.gameObject.position);
-        try renderObject(&scene.gameObject, assets, camera, zlm.Mat4.identity);
+        camera.shader.setUniformVec3("viewPos", transform.position);
+
+        const held = scene.treeLock.acquire();
+        for (scene.objects.items) |gameObject| {
+            try renderObject(gameObject, assets, camera, zlm.Mat4.identity);
+        }
+        held.release();
     }
 }
 
@@ -527,69 +533,56 @@ fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !vo
     }
 }
 
+// TODO: remake parent matrix with the new system
 fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera, parentMatrix: zlm.Mat4) anyerror!void {
     if (gameObject.objectType) |custom| {
         if (std.mem.eql(u8, custom, "skybox")) {
             return; // don't render skybox here
         }
     }
-    const rotMatrix = 
-        zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), gameObject.rotation.z).mul(
-        zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), gameObject.rotation.y).mul(
-        zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), gameObject.rotation.x)));
-    const matrix = 
-        zlm.Mat4.identity
-        .mul(zlm.Mat4.createScale(gameObject.scale))
-        .mul(rotMatrix)
-        .mul(zlm.Mat4.createTranslation(gameObject.position))
-        .mul(parentMatrix);
-    if (gameObject.mesh) |handle| {
-        renderHeld.release();
-        const mesh = try handle.get(Mesh, assets.allocator);
-        renderHeld = windowContextLock();
-        c.glBindVertexArray(mesh.vao);
-        const material = gameObject.material;
-
-        if (material.texture) |asset| {
+    if (gameObject.getComponent(objects.Transform)) |transform| {
+        const rotMatrix = 
+            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), transform.rotation.z).mul(
+            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), transform.rotation.y).mul(
+            zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), transform.rotation.x)));
+        const matrix = 
+            zlm.Mat4.identity
+            .mul(zlm.Mat4.createScale(transform.scale))
+            .mul(rotMatrix)
+            .mul(zlm.Mat4.createTranslation(transform.position))
+            .mul(parentMatrix);
+        if (gameObject.mesh) |handle| {
             renderHeld.release();
-            const texture = try asset.get(Texture, assets.allocator);
+            const mesh = try handle.get(Mesh, assets.allocator);
             renderHeld = windowContextLock();
-            texture.bind();
-            camera.shader.setUniformFloat("xTiling", if (texture.tiling.x == 0) 1 else gameObject.scale.x / texture.tiling.x);
-            camera.shader.setUniformFloat("yTiling", if (texture.tiling.y == 0) 1 else gameObject.scale.z / texture.tiling.y);
-            camera.shader.setUniformBool("useTex", true);
-        } else {
-            camera.shader.setUniformBool("useTex", false);
-        }
-        camera.shader.setUniformVec3("material.ambient", material.ambient);
-        camera.shader.setUniformVec3("material.diffuse", material.diffuse);
-        camera.shader.setUniformVec3("material.specular", material.specular);
-        var s: f32 = std.math.clamp(material.shininess, 1.0, 128.0);
-        camera.shader.setUniformFloat("material.shininess", s);
-        camera.shader.setUniformMat4("modelMatrix", matrix);
+            c.glBindVertexArray(mesh.vao);
+            const material = gameObject.material;
 
-        if (mesh.ebo != null) {
-            c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
-        } else {
-            c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
+            if (material.texture) |asset| {
+                renderHeld.release();
+                const texture = try asset.get(Texture, assets.allocator);
+                renderHeld = windowContextLock();
+                texture.bind();
+                camera.shader.setUniformFloat("xTiling", if (texture.tiling.x == 0) 1 else transform.scale.x / texture.tiling.x);
+                camera.shader.setUniformFloat("yTiling", if (texture.tiling.y == 0) 1 else transform.scale.z / texture.tiling.y);
+                camera.shader.setUniformBool("useTex", true);
+            } else {
+                camera.shader.setUniformBool("useTex", false);
+            }
+            camera.shader.setUniformVec3("material.ambient", material.ambient);
+            camera.shader.setUniformVec3("material.diffuse", material.diffuse);
+            camera.shader.setUniformVec3("material.specular", material.specular);
+            var s: f32 = std.math.clamp(material.shininess, 1.0, 128.0);
+            camera.shader.setUniformFloat("material.shininess", s);
+            camera.shader.setUniformMat4("modelMatrix", matrix);
+
+            if (mesh.ebo != null) {
+                c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
+            } else {
+                c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
+            }
         }
     }
-
-    const held = gameObject.treeLock.acquire();
-    for (gameObject.childrens.items) |child| {
-        if (std.io.is_async) {
-            var buf = try assets.allocator.alignedAlloc(u8, 16, @frameSize(renderObject));
-            defer assets.allocator.free(buf);
-            var result: anyerror!void = undefined;
-            var f = @asyncCall(buf, &result, renderObject, .{child, assets, camera, matrix});
-            await f catch |err| {
-                std.log.info("{s}", .{@errorName(err)});
-            };
-        } else {
-            try renderObject(child, assets, camera, matrix);
-        }
-    }
-    held.release();
 }
 
 pub usingnamespace @import("didot-window");

@@ -1,5 +1,6 @@
 const std = @import("std");
 const zlm = @import("zlm");
+const physics = @import("didot-physics");
 const Vec3 = zlm.Vec3;
 const Allocator = std.mem.Allocator;
 
@@ -7,11 +8,11 @@ usingnamespace @import("didot-graphics");
 usingnamespace @import("didot-objects");
 usingnamespace @import("didot-app");
 
-const physics = @import("didot-physics");
-
 var world: physics.World = undefined;
 var simPaused: bool = false;
 var r = std.rand.DefaultPrng.init(0);
+
+var scene: *Scene = undefined;
 
 //pub const io_mode = .evented;
 
@@ -19,17 +20,17 @@ const App = comptime blk: {
     comptime var systems = Systems {};
     systems.addSystem(update);
     systems.addSystem(testSystem);
+    systems.addSystem(playerSystem);
+    systems.addSystem(cameraSystem);
+
+    systems.addSystem(physics.rigidbodySystem);
     break :blk Application(systems);
 };
 
-const CameraControllerData = struct { input: *Input, player: *GameObject };
-const CameraController = ComponentType(.CameraController, CameraControllerData, .{ .updateFn = cameraInput }) {};
-fn cameraInput(allocator: *Allocator, component: *Component, delta: f32) !void {
-    const data = component.getData(CameraControllerData);
-    const gameObject = component.gameObject;
-    const input = data.input;
-
-    gameObject.position = data.player.position;
+const CameraController = struct { input: *Input, player: *GameObject };
+fn cameraSystem(controller: *CameraController, transform: *Transform) !void {
+    const input = controller.input;
+    transform.position = controller.player.getComponent(Transform).?.position;
 
     if (input.isMouseButtonDown(.Left)) {
         input.setMouseInputMode(.Grabbed);
@@ -39,26 +40,24 @@ fn cameraInput(allocator: *Allocator, component: *Component, delta: f32) !void {
     }
 
     if (input.getMouseInputMode() == .Grabbed) {
-        gameObject.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
-        gameObject.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
+        const delta = 1.0; // TODO: put delta in Application struct
+        transform.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
+        transform.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
     }
 }
 
-const PlayerControllerData = struct { input: *Input };
-const PlayerController = ComponentType(.PlayerController, PlayerControllerData, .{ .updateFn = playerInput }) {};
-fn playerInput(allocator: *Allocator, component: *Component, delta: f32) !void {
-    const data = component.getData(PlayerControllerData);
-    const gameObject = component.gameObject;
-    const input = data.input;
+const PlayerController = struct { input: *Input };
+fn playerSystem(controller: *PlayerController, rb: *physics.Rigidbody) !void {
+    const input = controller.input;
 
+    const delta = 1.0; // TODO: put delta in Application struct
     const speed: f32 = 40 / delta;
 
-    const camera = gameObject.parent.?.findChild("Camera").?;
+    const camera = scene.findChild("Camera").?.getComponent(Transform).?;
     var forward = camera.getForward();
     const left = camera.getLeft();
     forward.y = 0;
 
-    const rb = gameObject.findComponent(.Rigidbody).?.getData(physics.RigidbodyData);
     if (input.isKeyDown(Input.KEY_W)) {
         rb.addForce(forward.scale(speed));
     }
@@ -92,7 +91,7 @@ fn playerInput(allocator: *Allocator, component: *Component, delta: f32) !void {
     }
 }
 
-fn loadSkybox(allocator: *Allocator, camera: *Camera, scene: *Scene) !GameObject {
+fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
     var skyboxShader = try ShaderProgram.createFromFile(allocator, "assets/shaders/skybox-vert.glsl", "assets/shaders/skybox-frag.glsl");
     camera.*.skyboxShader = skyboxShader;
 
@@ -131,68 +130,69 @@ fn init(allocator: *Allocator, app: *App) !void {
     world.setGravity(zlm.Vec3.new(0, -9.8, 0));
 
     var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
-    const scene = app.scene;
+    scene = app.scene;
     const asset = &scene.assetManager;
 
     try asset.autoLoad(allocator);
     //try asset.comptimeAutoLoad(allocator);
 
-    // try asset.put("Texture/Concrete", try TextureAsset.init(allocator, .{
-    //     .path = "assets/textures/grass.png", .format = "png",
-    //     .tiling = zlm.Vec2.new(2, 2)
-    // }));
     var concreteMaterial = Material { .texture = asset.get("textures/grass.bmp") };
 
-    var player = GameObject.createEmpty(allocator);
-    player.position = Vec3.new(1.5, 3.5, -0.5);
-    player.scale = Vec3.new(2, 2, 2);
+    var player = try GameObject.createObject(allocator, null);
+    player.getComponent(Transform).?.* = .{
+        .position = Vec3.new(1.5, 3.5, -0.5),
+        .scale = Vec3.new(2, 2, 2)
+    };
     player.name = "Player";
-    try player.addComponent(try PlayerController.newWithData(allocator, .{ .input = &app.window.input }));
-    try player.addComponent(try physics.Rigidbody.newWithData(allocator,
-        .{
+    try player.addComponent(PlayerController { .input = &app.window.input });
+    try player.addComponent(physics.Rigidbody {
             .world = &world,
             .collider = .{
                 .Sphere = .{ .radius = 1.0 }
-                //.Box = .{ }
             }
-        }));
+        });
     try scene.add(player);
 
     var camera = try Camera.create(allocator, shader);
-    camera.gameObject.position = Vec3.new(1.5, 3.5, -0.5);
-    camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
+    camera.gameObject.getComponent(Transform).?.* = .{
+        .position = Vec3.new(1.5, 3.5, -0.5),
+        .rotation = Vec3.new(-120.0, -15.0, 0).toRadians()
+    };
     camera.gameObject.name = "Camera";
-    const controller = try CameraController.newWithData(allocator, .{
-        .input=&app.window.input,
-        .player=scene.gameObject.findChild("Player").?
+    try camera.gameObject.addComponent(CameraController {
+        .input = &app.window.input,
+        .player = scene.findChild("Player").?
     });
-    try camera.gameObject.addComponent(controller);
     try scene.add(camera.gameObject);
 
-    const skybox = try loadSkybox(allocator, camera, scene);
+    const skybox = try loadSkybox(allocator, camera);
     try scene.add(skybox);
 
-    var cube = GameObject.createObject(allocator, asset.get("Mesh/Cube"));
-    cube.position = Vec3.new(5, -0.75, -10);
-    cube.scale = Vec3.new(250, 0.1, 250);
+    var cube = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
+    cube.getComponent(Transform).?.* = .{
+        .position = Vec3.new(5, -0.75, -10),
+        .scale = Vec3.new(250, 0.1, 250)
+    };
     cube.material = concreteMaterial;
-    try cube.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world=&world, .kinematic=.Kinematic,
-        .collider = .{ .Box = .{ .size = Vec3.new(250, 0.1, 250) }}}));
+    try cube.addComponent(physics.Rigidbody { .world=&world, .kinematic=.Kinematic,
+        .collider = .{ .Box = .{ .size = Vec3.new(250, 0.1, 250) }}});
     try scene.add(cube);
 
-    var cube2 = GameObject.createObject(allocator, asset.get("Mesh/Cube"));
-    cube2.position = Vec3.new(-1.2, 5.75, -3);
-    cube2.scale = Vec3.new(1, 2, 1);
+    var cube2 = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
+    cube2.getComponent(Transform).?.* = .{
+        .position = Vec3.new(-1.2, 5.75, -3),
+        .scale = Vec3.new(1, 2, 1)
+    };
     cube2.material.ambient = Vec3.new(0.2, 0.1, 0.1);
     cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
-    try cube2.addComponent(try physics.Rigidbody.newWithData(allocator, .{ .world = &world,
-        .collider = .{ .Box = .{ .size = Vec3.new(1, 2, 1) }}}));
+    try cube2.addComponent(physics.Rigidbody { .world = &world,
+        .collider = .{ .Box = .{ .size = Vec3.new(1, 2, 1) }}});
     try scene.add(cube2);
 
-    var light = GameObject.createObject(allocator, asset.get("Mesh/Cube"));
-    light.position = Vec3.new(1, 5, -5);
+    var light = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
+    light.getComponent(Transform).?.position = Vec3.new(1, 5, -5);
     light.material.ambient = Vec3.one;
-    try light.addComponent(try PointLight.newWithData(allocator, .{}));
+    try light.addComponent(PointLight {});
     try scene.add(light);
 }
 
@@ -201,11 +201,10 @@ var gp: std.heap.GeneralPurposeAllocator(.{}) = .{};
 pub fn main() !void {
     defer _ = gp.deinit();
     const allocator = &gp.allocator;
-    var scene = try Scene.create(allocator, null);
 
     var app = App {
         .title = "Test Room",
         .initFn = init
     };
-    try app.run(allocator, scene);
+    try app.run(allocator, try Scene.create(allocator, null));
 }

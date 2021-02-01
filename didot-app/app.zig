@@ -124,20 +124,53 @@ pub fn Application(comptime systems: Systems) type {
             inline for (systems.items) |sys| {
                 const info = @typeInfo(sys.type).Fn;
                 var tuple: std.meta.ArgsTuple(sys.type) = undefined;
+                var skip: bool = false;
+                comptime var isForEach: bool = false;
+                comptime var forEachTypes: []const type = &[0]type {};
 
                 inline for (info.args) |arg, i| {
                     const key = comptime std.fmt.comptimePrint("{}", .{i});
                     const Type = arg.arg_type.?;
-                    if (@typeName(Type) == "SystemQuery") {
-                        var query = Type {};
+                    if (comptime std.mem.eql(u8, @typeName(Type), "SystemQuery")) {
+                        var query = Type { .scene = self.scene };
                         @field(tuple, key) = query;
+                    } else if (comptime std.meta.trait.isSingleItemPtr(Type)) {
+                        isForEach = true;
+                        forEachTypes = forEachTypes ++ &[_]type {Type};
                     } else {
                         @compileError("Invalid argument type: " ++ @typeName(Type));
                     }
                 }
                 
-                const opts: std.builtin.CallOptions = .{};
-                try @call(opts, sys.function, tuple);
+                if (!skip) {
+                    const opts: std.builtin.CallOptions = .{};
+                    if (isForEach) {
+                        const tupleTypes = [1]type {type} ** forEachTypes.len;
+                        const TupleType = std.meta.Tuple(&tupleTypes);
+                        comptime var queryTuple: TupleType = undefined;
+                        inline for (forEachTypes) |compType, i| {
+                            @field(queryTuple, comptime std.fmt.comptimePrint("{}", .{i})) = compType;
+                        }
+                        var query = objects.Query(queryTuple) { .scene = self.scene };
+                        var it = query.iterator();
+
+                        while (it.next()) |o| {
+                            inline for (info.args) |arg, i| {
+                                if (comptime std.meta.trait.isSingleItemPtr(arg.arg_type.?)) {
+                                    const key = comptime std.fmt.comptimePrint("{}", .{i});
+                                    const name = @typeName(std.meta.Child(arg.arg_type.?));
+                                    comptime var fieldName: [name.len]u8 = undefined;
+                                    fieldName = name.*;
+                                    fieldName[0] = comptime std.ascii.toLower(fieldName[0]);
+                                    @field(tuple, key) = @field(o, &fieldName);
+                                }
+                            }
+                            try @call(opts, sys.function, tuple);
+                        }
+                    } else {
+                        try @call(opts, sys.function, tuple);
+                    }
+                }
             }
             
             const updateLength = self.timer.read();

@@ -9,6 +9,7 @@ const c = @cImport({
 const Allocator = std.mem.Allocator;
 const Component = objects.Component;
 const GameObject = objects.GameObject;
+const Transform = objects.Transform;
 
 var isOdeInit: bool = false;
 const logger = std.log.scoped(.didot);
@@ -55,8 +56,8 @@ pub const World = struct {
         const b2 = c.dGeomGetBody(o2);
         const self = @ptrCast(*World, @alignCast(@alignOf(World), data.?));
 
-        const b1data = @ptrCast(*RigidbodyData, @alignCast(@alignOf(RigidbodyData), c.dBodyGetData(b1).?));
-        const b2data = @ptrCast(*RigidbodyData, @alignCast(@alignOf(RigidbodyData), c.dBodyGetData(b2).?));
+        const b1data = @ptrCast(*Rigidbody, @alignCast(@alignOf(Rigidbody), c.dBodyGetData(b1).?));
+        const b2data = @ptrCast(*Rigidbody, @alignCast(@alignOf(Rigidbody), c.dBodyGetData(b2).?));
 
         const bounce: f32 = std.math.max(b1data.material.bounciness, b2data.material.bounciness);
 
@@ -79,7 +80,7 @@ pub const World = struct {
         c.dWorldSetAutoDisableLinearThreshold(self.id, 0.1);
         c.dWorldSetAutoDisableAngularThreshold(self.id, 0.1);
         //c.dWorldSetERP(self.id, 0.1);
-        //dWorldSetCFM(self.id, 0.0000);
+        //c.dWorldSetCFM(self.id, 0.0000);
     }
 
     pub fn update(self: *World) void {
@@ -122,13 +123,15 @@ pub const Collider = union(enum) {
     Sphere: SphereCollider
 };
 
-pub const RigidbodyData = struct {
+/// Rigidbody component.
+/// Add it to a GameObject for it to have physics with other rigidbodies.
+pub const Rigidbody = struct {
     /// Set by the Rigidbody component allowing it to know when to initialize internal values.
     inited: bool = false,
     /// The pointer to the World **MUST** be set.
     world: *World,
     kinematic: KinematicState = .Dynamic,
-    gameObject: *GameObject = undefined,
+    transform: *Transform = undefined,
     material: PhysicsMaterial = .{},
     collider: Collider = .{ .Box = .{} },
     /// Internal value (ODE dBodyID)
@@ -138,20 +141,16 @@ pub const RigidbodyData = struct {
     /// Internal value (ODE dMass)
     _mass: c.dMass = undefined,
 
-    pub fn addForce(self: *RigidbodyData, force: zlm.Vec3) void {
+    pub fn addForce(self: *Rigidbody, force: zlm.Vec3) void {
         c.dBodyEnable(self._body);
         c.dBodyAddForce(self._body, force.x, force.y, force.z);
     }
 
-    pub fn setPosition(self: *RigidbodyData, position: zlm.Vec3) void {
+    pub fn setPosition(self: *Rigidbody, position: zlm.Vec3) void {
         c.dBodySetPosition(self._body, position.x, position.y, position.z);
-        self.gameObject.position = position;
+        self.transform.position = position;
     }
 };
-
-/// Rigidbody component.
-/// Add it to a GameObject for it to have physics with other rigidbodies.
-pub const Rigidbody = comptime objects.ComponentType(.Rigidbody, RigidbodyData, .{ .updateFn = rigidbodyUpdate }) {};
 
 fn quatToEuler(q: [*]const c.dReal) zlm.Vec3 {
     var angles = zlm.Vec3.new(0, 0, 0);
@@ -169,41 +168,44 @@ fn quatToEuler(q: [*]const c.dReal) zlm.Vec3 {
     return angles;
 }
 
-fn rigidbodyUpdate(allocator: *Allocator, component: *Component, delta: f32) !void {
-    const data = component.getData(RigidbodyData);
-    const gameObject = component.gameObject;
-    if (!data.inited) {
-        data._body = c.dBodyCreate(data.world.id);
-        const scale = gameObject.scale;
-        data._geom = switch (data.collider) {
-            .Box => |box| c.dCreateBox(data.world.space, box.size.x, box.size.y, box.size.z),
-            .Sphere => |sphere| c.dCreateSphere(data.world.space, sphere.radius)
-        };
-        data.gameObject = gameObject;
-        c.dMassSetBox(&data._mass, 1.0, 1.0, 1.0, 1.0);
-        c.dGeomSetBody(data._geom, data._body);
-        data.setPosition(gameObject.position);
-        c.dBodySetData(data._body, data);
-        c.dBodySetMass(data._body, &data._mass);
-        c.dBodySetDamping(data._body, 0.005, 0.005);
-        data.inited = true;
-    }
-    if (c.dBodyIsEnabled(data._body) != 0) {
-        switch (data.kinematic) {
-            .Dynamic => c.dBodySetDynamic(data._body),
-            .Kinematic => c.dBodySetKinematic(data._body)
+pub fn rigidbodySystem(query: objects.Query(.{*Rigidbody, *Transform})) !void {
+    var iterator = query.iterator();
+    while (iterator.next()) |o| {
+        const data = o.rigidbody;
+        const transform = o.transform;
+        if (!data.inited) { // TODO: move to a system that uses the Created() filter
+            data._body = c.dBodyCreate(data.world.id);
+            const scale = transform.scale;
+            data._geom = switch (data.collider) {
+                .Box => |box| c.dCreateBox(data.world.space, box.size.x, box.size.y, box.size.z),
+                .Sphere => |sphere| c.dCreateSphere(data.world.space, sphere.radius)
+            };
+            data.transform = transform;
+            c.dMassSetBox(&data._mass, 1.0, 1.0, 1.0, 1.0);
+            c.dGeomSetBody(data._geom, data._body);
+            data.setPosition(transform.position);
+            c.dBodySetData(data._body, data);
+            c.dBodySetMass(data._body, &data._mass);
+            c.dBodySetDamping(data._body, 0.005, 0.005);
+            data.inited = true;
         }
-        const scale = gameObject.scale;
-        //c.dGeomBoxSetLengths(data._geom, scale.x, scale.y, scale.z);
-        const pos = c.dBodyGetPosition(data._body);
-        const rot = quatToEuler(c.dBodyGetQuaternion(data._body));
-        gameObject.rotation = rot;
-        gameObject.position = zlm.Vec3.new(pos[0], pos[1], pos[2]);
+        if (c.dBodyIsEnabled(data._body) != 0) {
+            switch (data.kinematic) {
+                .Dynamic => c.dBodySetDynamic(data._body),
+                .Kinematic => c.dBodySetKinematic(data._body)
+            }
+            const scale = transform.scale;
+            //c.dGeomBoxSetLengths(data._geom, scale.x, scale.y, scale.z);
+            const pos = c.dBodyGetPosition(data._body);
+            const rot = quatToEuler(c.dBodyGetQuaternion(data._body));
+            transform.rotation = rot;
+            transform.position = zlm.Vec3.new(pos[0], pos[1], pos[2]);
+        }
     }
 }
 
 comptime {
     std.testing.refAllDecls(@This());
-    std.testing.refAllDecls(RigidbodyData);
+    std.testing.refAllDecls(Rigidbody);
     std.testing.refAllDecls(World);
 }

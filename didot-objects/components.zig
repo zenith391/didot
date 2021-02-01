@@ -1,21 +1,24 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const GameObject = @import("objects.zig").GameObject;
+const objects = @import("objects.zig");
+const GameObject = objects.GameObject;
 
 pub const Component = struct {
-    options: ComponentOptions,
     data: usize,
     allocator: *Allocator,
+    name: []const u8,
     gameObject: *GameObject = undefined,
-    enabled: bool = true,
-    // Uses a pointer in order to save memory.
-    name: *const []const u8,
+    // TODO: index into a scene array of objects
 
-    pub fn update(self: *Component, allocator: *Allocator, delta: f32) anyerror!void {
-        if (!self.enabled) return;
-        if (self.options.updateFn) |func| {
-            try func(allocator, self, delta);
-        }
+    pub fn from(allocator: *Allocator, x: anytype) !Component {
+        const T = @TypeOf(x);
+        var copy = try allocator.create(T);
+        copy.* = x;
+        return Component {
+            .data = @ptrToInt(copy),
+            .allocator = allocator,
+            .name = @typeName(T),
+        };
     }
 
     /// Get the type name of this component.
@@ -68,6 +71,20 @@ pub fn With(comptime T: type) type {
     };
 }
 
+fn getComponents(comptime parameters: anytype) []type {
+    const info = @typeInfo(@TypeOf(parameters)).Struct;
+    var types: [info.fields.len]type = undefined;
+
+    for (info.fields) |field, i| {
+        types[i] = @field(parameters, field.name);
+        if (!std.meta.trait.isSingleItemPtr(types[i])) {
+            @compileError("Invalid type " ++ @typeName(types[i]) ++ ", must be *" ++ @typeName(types[i]) ++ " or *const " ++ @typeName(types[i]));
+        }
+    }
+
+    return &types;
+}
+
 // fn testSystem(pos: *Position, vel: *const Velocity); is used for single item systems
 // fn testSystem(ent: Query(.{*Mob}), obs: Query(.{*const Obstacle}))
 // fn testSystem(x: Query(.{Without(Velocity), With(*Position)})) without doesn't need a pointer
@@ -77,20 +94,77 @@ pub fn With(comptime T: type) type {
 /// Queries are to be used for processing multiple components at a time
 pub fn Query(comptime parameters: anytype) type {
     const SystemQuery = struct {
-        const Result = struct {
-            go: GameObject
+        const Self = @This();
+
+        scene: *objects.Scene,
+        const Result = comptime blk: {
+            const StructField = std.builtin.TypeInfo.StructField;
+
+            var fields: []const StructField = &[0]StructField {};
+            const comps = getComponents(parameters);
+            for (comps) |comp| {
+                const name = @typeName(std.meta.Child(comp));
+                var newName: [name.len]u8 = undefined;
+                newName = name.*;
+                newName[0] = std.ascii.toLower(newName[0]);
+                const field = StructField {
+                    .name = &newName,
+                    .field_type = comp,
+                    .default_value = null,
+                    .is_comptime = false,
+                    .alignment = @alignOf(comp)
+                };
+                fields = fields ++ &[_]StructField {field};
+            }
+
+
+            const info = std.builtin.TypeInfo {
+                .Struct = .{
+                    .layout = .Auto,
+                    .fields = fields,
+                    .decls = &[0]std.builtin.TypeInfo.Declaration {},
+                    .is_tuple = false
+                }
+            };
+            break :blk @Type(info);
         };
 
         const Iterator = struct {
             pos: usize = 0,
+            query: *const Self,
 
             pub fn next(self: *Iterator) ?Result {
+                const scene = self.query.scene;
+                while (self.pos < scene.objects.items.len) : (self.pos += 1) {
+                    const obj = scene.objects.items[self.pos];
+                    const comps = getComponents(parameters);
+                    var result: Result = undefined;
+
+                    // TODO: use filters
+                    var ok: bool = true;
+                    inline for (comps) |comp| {
+                        const name = @typeName(std.meta.Child(comp));
+                        comptime var newName: [name.len]u8 = undefined;
+                        newName = name.*;
+                        newName[0] = comptime std.ascii.toLower(newName[0]);
+                        if (obj.getComponent(std.meta.Child(comp))) |cp| {
+                            @field(result, &newName) = cp;
+                        } else {
+                            ok = false;
+                        }
+                    }
+                    if (ok) {
+                        self.pos += 1;
+                        return result;
+                    }
+                }
+
                 return null;
             }
         };
 
         pub fn iterator(self: *const @This()) Iterator {
-            return Iterator {};
+            return Iterator { .query = self };
         }
 
         pub fn parallelIterator(self: *const @This(), divides: usize) Iterator {
@@ -101,40 +175,6 @@ pub fn Query(comptime parameters: anytype) type {
     return SystemQuery;
 }
 
-// TODO: maintain a registry with names and all the fields of the Data struct for scene loading.
-pub fn ComponentType(comptime name: @Type(.EnumLiteral), comptime Data: anytype, options: ComponentOptions) type {
-    const ComponentTypeStruct = struct {
-        /// The type name of the component (equals to the 'name' argument of the function).
-        name: []const u8 = @tagName(name),
-        /// TODO: dependencies
-        dependencies: [][]const u8 = undefined,
-
-        /// Create a new component with pre-initialized data.
-        pub fn newWithData(self: *const @This(), allocator: *Allocator, data: Data) !Component {
-            const newData: ?*Data = if (@sizeOf(Data) == 0) null else try allocator.create(Data);
-            if (newData != null) {
-                newData.?.* = data;
-            }
-            var cp = Component {
-                .options = options,
-                .allocator = allocator,
-                .data = if (@sizeOf(Data) == 0) 0 else @ptrToInt(newData),
-                .name = &self.name
-            };
-            return cp;
-        }
-
-        /// Create a new component with undefined data.
-        pub fn new(self: *const @This(), allocator: *Allocator) !Component {
-            return self.newWithData(allocator, undefined);
-        }
-
-    };
-    comptime std.testing.refAllDecls(ComponentTypeStruct);
-    return ComponentTypeStruct;
-} 
-
 comptime {
     std.testing.refAllDecls(@This());
-    std.testing.refAllDecls(Component);
 }

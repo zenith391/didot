@@ -120,7 +120,6 @@ pub fn Application(comptime systems: Systems) type {
             const dt = @floatCast(f32, time_per_frame / @intToFloat(f64, time));
 
             var result: anyerror!void = undefined;
-            self.scene.gameObject.update(self.allocator, dt) catch |err| printErr(err);
 
             inline for (systems.items) |sys| {
                 const info = @typeInfo(sys.type).Fn;

@@ -223,14 +223,6 @@ pub const GameObject = struct {
         return gameObject;
     }
 
-    pub fn update(self: *GameObject, allocator: *Allocator, delta: f32) anyerror!void {
-        var iterator = self.components.iterator();
-        while (iterator.next()) |entry| {
-            var component = &entry.value;
-            //try component.update(allocator, delta);
-        }
-    }
-
     pub fn getComponent(self: *const GameObject, comptime T: type) ?*T {
         if (self.components.get(@typeName(T))) |cp| {
             return @intToPtr(*T, cp.data);
@@ -403,7 +395,6 @@ pub const Transform = struct {
 //pub const Renderer2D = ComponentType(.Renderer2D, struct {}, .{}) {};
 
 pub const Scene = struct {
-    gameObject: GameObject,
     objects: GameObjectArrayList,
     /// The camera the scene is currently using.
     /// It is auto-detected at runtime before each render by looking
@@ -422,7 +413,6 @@ pub const Scene = struct {
 
     pub fn create(allocator: *Allocator, assetManager: ?AssetManager) !*Scene {
         var scene = try allocator.create(Scene);
-        scene.gameObject = GameObject.createEmpty(allocator);
         scene.allocator = allocator;
         scene.treeLock = .{};
         scene.objects = GameObjectArrayList.init(allocator);
@@ -506,7 +496,6 @@ pub const Scene = struct {
 
     pub fn deinit(self: *Scene) void {
         self.assetManager.deinit();
-        //self.gameObject.deinit();
         for (self.objects.items) |child| {
             child.deinit();
             self.objects.allocator.destroy(child);
@@ -517,7 +506,6 @@ pub const Scene = struct {
 
     pub fn deinitAll(self: *Scene) void {
         self.assetManager.deinit();
-        //self.gameObject.deinitAll();
         for (self.objects.items) |child| {
             child.deinit();
             self.objects.allocator.destroy(child);

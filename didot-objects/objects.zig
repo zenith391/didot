@@ -172,14 +172,6 @@ pub const GameObject = struct {
     mesh: ?AssetHandle = null,
     name: []const u8 = "Game Object",
     components: ComponentMap,
-
-    /// Type of object owning this game object ("camera", "scene", etc.)
-    objectType: ?[]const u8 = null,
-    /// Pointer to the struct of the object owning this game object.
-    /// To save space, it must be considered null when objectType is null.
-    objectPointer: usize = 0,
-    /// The allocator used to create objectPointer, if any.
-    objectAllocator: ?*Allocator = null,
     material: Material = Material.default,
 
     /// To be used for game objects entirely made of other game objects as childrens, or for script-only game objects.
@@ -199,19 +191,6 @@ pub const GameObject = struct {
         if (mesh != null) {
             // TODO: add Renderer
         }
-        return gameObject;
-    }
-
-    // TODO: remove
-    /// For cameras, scenes, etc.
-    pub fn createCustom(allocator: *Allocator, customType: []const u8, ptr: usize) !GameObject {
-        var gameObject = GameObject {
-            .objectType = customType,
-            .objectPointer = ptr,
-            .objectAllocator = allocator,
-            .components = ComponentMap.init(allocator)
-        };
-        try gameObject.addComponent(Transform {});
         return gameObject;
     }
 
@@ -280,13 +259,6 @@ pub const GameObject = struct {
             component.deinit();
         }
         self.components.deinit();
-        const objectAllocator = self.objectAllocator;
-        const objectPointer = self.objectPointer;
-        if (objectAllocator) |alloc| {
-            if (objectPointer != 0) {
-                alloc.destroy(@intToPtr(*u8, objectPointer));
-            }
-        }
     }
 };
 
@@ -398,11 +370,6 @@ pub const Scene = struct {
     /// It is auto-detected at runtime before each render by looking
     /// on top-level game objects to select one that has a Camera component.
     camera: ?*GameObject,
-    /// The skybox the scene is currently using.
-    /// It is auto-detected at runtime before each render by looking
-    /// on top-level game objects to select one that corresponds
-    /// to the "skybox" type.
-    skybox: ?*GameObject,
     pointLight: ?*GameObject,
     assetManager: AssetManager,
     allocator: *Allocator,
@@ -441,16 +408,10 @@ pub const Scene = struct {
 
         // TODO: only do this when a new child is inserted
         self.camera = null;
-        self.skybox = null;
         self.pointLight = null;
 
         var held = self.treeLock.acquire();
         for (childs.items) |child| {
-            if (child.objectType) |objectType| {
-                if (std.mem.eql(u8, objectType, "skybox")) {
-                    self.skybox = child;
-                }
-            }
             if (child.hasComponent(PointLight)) {
                 self.pointLight = child;
             }

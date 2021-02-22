@@ -11,6 +11,7 @@ pub const EngineConfig = struct {
     graphicsModule: []const u8 = "didot-opengl",
     /// Whether or not to automatically set the recommended window module depending on the target platform.
     /// Currently, didot-x11 will be used for Linux and didot-glfw for other platforms.
+    /// Temporarily disabled!
     autoWindow: bool = true,
     /// Whether or not to include the physics module
     usePhysics: bool = false,
@@ -31,15 +32,15 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     };
 
     const windowModule = comptime blk: {
-        if (config.autoWindow) {
-            const target = step.target.toTarget().os.tag;
-            break :blk switch (target) {
-                .linux => "didot-x11",
-                else => "didot-glfw"
-            };
-        } else {
+        // if (config.autoWindow) {
+        //     const target = step.target.toTarget().os.tag;
+        //     break :blk switch (target) {
+        //         .linux => "didot-x11",
+        //         else => "didot-glfw"
+        //     };
+        // } else {
             break :blk config.windowModule;
-        }
+        // }
     };
 
     const window = (try @import(prefix ++ windowModule ++ "/build.zig").build(step, config)) orelse Pkg {

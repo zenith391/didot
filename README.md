@@ -1,4 +1,7 @@
-# Didot 3D Engine
+# Didot
+A Zig 3D game engine.
+
+---
 
 ![Demo featuring skybox, karts, grass and a cube](https://raw.githubusercontent.com/zenith391/didot/master/examples/kart-and-cubes.png)
 

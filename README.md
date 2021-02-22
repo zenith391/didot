@@ -5,37 +5,39 @@ A Zig 3D game engine.
 
 ![Demo featuring skybox, karts, grass and a cube](https://raw.githubusercontent.com/zenith391/didot/master/examples/kart-and-cubes.png)
 
-This multi-threaded 3D game engine made for Zig is aimed at high-level constructs, you manipulate game objects and meshes instead of OpenGL calls and batches.
+## Introduction
 
-That combined with the fact the engine is in multiple packages, this means that changing the graphics module to something else is easy,
-just need to for example use `didot-x11` instead of `didot-glfw` to use X11 instead of depending on GLFW. And since they share the same API, absolutely zero porting is necessary!
+Didot is a multi-threaded 3D game engine programmed in Zig and aimed at high-level constructs: you manipulate game objects and meshes instead of OpenGL calls and batches.
 
-This also works for graphics backend, so by using `didot-vulkan` (will come one day) instead of `didot-opengl`, your games can now seamlessly run with Vulkan! (althought some changes to shaders will be required)
+It improves developers life by splitting the engine into multiple modules in order to have easier porting to other platforms. For example, you can change the windowing module from `didot-glfw` to `didot-x11` to use Xlib instead of depending on GLFW without any change to your game's code, as porting (except for shaders) is transparent to the developer's code.
 
-[API reference](https://zenith391.github.io/didot/#root)
+## Installation
+Prerequisites:
+- Zig compiler (`master` branch, didot is currently tested with commit `0aef1fa`)
 
-## Features
-- [Scene editor](https://github.com/zenith391/didot-editor)
-- Assets manager
-- OpenGL backend
-  - Shaders
-  - Meshes
-  - Materials
-  - Textures
-- Windowing
-  - GLFW backend
-  - X11 backend
-- Model loader
-  - OBJ files
-- Image loader
-  - BMP files
-  - PNG files
-- Application system for easier use
-- Game objects system
+You only need to launch your terminal and execute those commands in an empty directory:
+```sh
+git clone https://github.com/zenith391/didot
+zig init-exe
+```
+And then, change the resulting `build.zig` file looks like this:
+```zig
+const didot = @import("didot/build.zig");
+const Builder = @import("std").build.Builder;
 
-## Examples
+pub fn build(b: *Builder) void {
+    // ...
+    exe.setBuildMode(mode);
+    try didot.addEngineToExe(exe, .{
+        .prefix = "didot/"
+    });
+    exe.install();
+    // ...
+}
+```
 
-Cube:
+## Using Didot
+Showing a cube:
 ```zig
 const std = @import("std");
 const zlm = @import("zlm");
@@ -75,7 +77,6 @@ pub fn main() !void {
     try app.run(allocator, scene);
 }
 ```
-That is where you can see it's not 100% true that zero porting is necessary, if you use some other graphics backend that doesn't accept GLSL, you'll have to rewrite the shaders.
 
 And to make that into a textured cube, only a few lines are necessary:
 ```zig
@@ -110,20 +111,23 @@ pub fn main() !void {
 }
 ```
 
-## How to use
+[API reference](https://zenith391.github.io/didot/#root)
 
-Just add this to your build script:
-```zig
-const engine = @import("path/to/engine/build.zig");
-
-pub fn build(b: *Builder) !void {
-    // your code ...
-    try engine.addEngineToExe(exe, .{
-      .prefix = "path/to/engine/"
-    });
-    // more code ...
-}
-```
-Where `exe` is a `LibExeObjStep` (made by `b.addExecutable`).
-
-And now Didot is ready for use!
+## Features
+- [Scene editor](https://github.com/zenith391/didot-editor)
+- Assets manager
+- OpenGL backend
+  - Shaders
+  - Meshes
+  - Materials
+  - Textures
+- Windowing
+  - GLFW backend
+  - X11 backend
+- Model loader
+  - OBJ files
+- Image loader
+  - BMP files
+  - PNG files
+- Application system for easier use
+- Game objects system

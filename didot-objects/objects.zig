@@ -18,14 +18,6 @@ pub var PrimitivePlaneMesh: Mesh = undefined;
 /// Mesh of a cube.
 pub var PrimitiveCubeMesh: Mesh = undefined;
 
-/// Material must be set manually.
-/// Memory is caller owned
-/// initPrimitives() must have been called before calling this function!
-pub fn createSkybox(allocator: *Allocator) !GameObject {
-    var go = GameObject.createCustom(allocator, "skybox", 0);
-    return go;
-}
-
 pub fn createHeightmap(allocator: *Allocator, heightmap: [][]const f32) !Mesh {
     const height = heightmap.len;
     const width  = heightmap[0].len;
@@ -339,11 +331,17 @@ pub const Projection = union(enum) {
 //     }
 // };
 
+pub const Skybox = struct {
+    shader: graphics.ShaderProgram,
+    cubemap: AssetHandle,
+    mesh: AssetHandle
+};
+
 /// Camera component.
 /// Add it to a GameObject for it to act as the camera.
 pub const Camera = struct {
     shader: graphics.ShaderProgram,
-    skyboxShader: ?graphics.ShaderProgram = null,
+    skybox: ?Skybox = null,
     priority: u32 = 0,
     projection: Projection = .{
         .Perspective = .{ .fov = 70, .far = 1000, .near = 0.1 }

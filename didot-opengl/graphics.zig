@@ -461,14 +461,12 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
         const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch)).normalize();
         const viewMatrix = zlm.Mat4.createLookAt(transform.position, transform.position.add(direction), zlm.Vec3.new(0.0, 1.0, 0.0));
 
-        if (scene.skybox) |skybox| {
-            if (camera.skyboxShader) |*skyboxShader| {
-                skyboxShader.bind();
-                const view = viewMatrix.toMat3().toMat4();
-                skyboxShader.setUniformMat4("view", view);
-                skyboxShader.setUniformMat4("projection", projMatrix);
-                try renderSkybox(skybox, assets, camera);
-            }
+        if (camera.skybox) |*skybox| {
+            skybox.shader.bind();
+            const view = viewMatrix.toMat3().toMat4();
+            skybox.shader.setUniformMat4("view", view);
+            skybox.shader.setUniformMat4("projection", projMatrix);
+            try renderSkybox(skybox, assets, camera);
         }
 
         camera.shader.bind();
@@ -503,36 +501,26 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
     }
 }
 
-fn renderSkybox(skybox: *GameObject, assets: *AssetManager, camera: *Camera) !void {
-    if (skybox.mesh) |handle| {
-        var mesh = try handle.get(Mesh, assets.allocator);
-        c.glDepthMask(c.GL_FALSE);
-        c.glBindVertexArray(mesh.vao);
-        const material = &skybox.material;
+fn renderSkybox(skybox: *objects.Skybox, assets: *AssetManager, camera: *Camera) !void {
+    var mesh = try skybox.mesh.get(Mesh, assets.allocator);
+    c.glDepthMask(c.GL_FALSE);
+    c.glBindVertexArray(mesh.vao);
 
-        if (material.texture) |asset| {
-            renderHeld.release();
-            const texture = try asset.get(Texture, assets.allocator);
-            renderHeld = windowContextLock();
-            c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
-        }
+    renderHeld.release();
+    const texture = try skybox.cubemap.get(Texture, assets.allocator);
+    renderHeld = windowContextLock();
+    c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
 
-        if (mesh.ebo != null) {
-            c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
-        } else {
-            c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
-        }
-        c.glDepthMask(c.GL_TRUE);
+    if (mesh.ebo != null) {
+        c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
+    } else {
+        c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
     }
+    c.glDepthMask(c.GL_TRUE);
 }
 
 // TODO: remake parent matrix with the new system
 fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera, parentMatrix: zlm.Mat4) anyerror!void {
-    if (gameObject.objectType) |custom| {
-        if (std.mem.eql(u8, custom, "skybox")) {
-            return; // don't render skybox here
-        }
-    }
     if (gameObject.getComponent(objects.Transform)) |transform| {
         const rotMatrix = 
             zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), transform.rotation.z).mul(

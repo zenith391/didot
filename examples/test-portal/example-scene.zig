@@ -91,12 +91,8 @@ fn playerSystem(controller: *PlayerController, rb: *physics.Rigidbody) !void {
     }
 }
 
-fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
-    var skyboxShader = try ShaderProgram.createFromFile(allocator, "assets/shaders/skybox-vert.glsl", "assets/shaders/skybox-frag.glsl");
-    camera.skyboxShader = skyboxShader;
-
+fn loadSkybox(allocator: *Allocator, camera: *Camera) !void {
     const asset = &scene.assetManager;
-
     try asset.put("textures/skybox", try TextureAsset.initCubemap(allocator, .{
         .front = asset.get("textures/skybox/front.png").?,
         .back = asset.get("textures/skybox/back.png").?,
@@ -106,11 +102,12 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
         .bottom = asset.get("textures/skybox/bottom.png").?,
     }));
 
-    var skyboxMaterial = Material{ .texture = scene.assetManager.get("textures/skybox") };
-    var skybox = try createSkybox(allocator);
-    skybox.mesh = asset.get("Mesh/Cube");
-    skybox.material = skyboxMaterial;
-    return skybox;
+    var skyboxShader = try ShaderProgram.createFromFile(allocator, "assets/shaders/skybox-vert.glsl", "assets/shaders/skybox-frag.glsl");
+    camera.skybox = Skybox {
+        .mesh = asset.get("Mesh/Cube").?,
+        .cubemap = asset.get("textures/skybox").?,
+        .shader = skyboxShader
+    };
 }
 
 fn testSystem(query: Query(.{})) !void {
@@ -166,8 +163,7 @@ fn init(allocator: *Allocator, app: *App) !void {
     });
     try scene.add(camera);
 
-    const skybox = try loadSkybox(allocator, camera.getComponent(Camera).?);
-    try scene.add(skybox);
+    try loadSkybox(allocator, camera.getComponent(Camera).?);
 
     var cube = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
     cube.getComponent(Transform).?.* = .{

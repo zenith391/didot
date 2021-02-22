@@ -270,10 +270,17 @@ pub const Window = struct {
         c.glfwMakeContextCurrent(self.nativeId);
     }
 
+    pub inline fn setMain(self: *Window) void {
+        mainWindow = self;
+    }
+
+    pub fn setShouldClose(self: *Window, value: bool) void {
+        c.glfwSetWindowShouldClose(self.nativeId, if (value) 1 else 0);
+    }
+
     /// Poll events, swap buffer and update input.
     /// Returns false if the window should be closed and true otherwises.
     pub fn update(self: *Window) bool {
-        mainWindow = self;
         self.makeContextCurrent();
         c.glfwSwapBuffers(self.nativeId);
         c.glfwPollEvents();

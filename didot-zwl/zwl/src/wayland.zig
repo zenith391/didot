@@ -52,6 +52,25 @@ pub fn Platform(comptime Parent: anytype) type {
             return @ptrCast(*Parent.Window, window);
         }
 
+        const MessageId = enum(u16) {
+
+        };
+
+        const Message = union(MessageId) {
+
+        };
+
+        fn sendMessage(writer: anytype, objectId: u32, message: Message) !void {
+            const T = @TypeOf(message);
+            const tag = std.meta.activeTag(message);
+            const size = @sizeOf(std.meta.TagPayloadType(Message, tag));
+            const opcode = @enumToInt(message);
+
+            try writer.writeIntNative(u32, objectId);
+            try writer.writeIntNative(u32, ((size + 8) << 16) | opcode);
+            try writer.writeAll(std.mem.asBytes(&message));
+        }
+
         pub const Window = struct {
             parent: Parent.Window,
             width: u16,

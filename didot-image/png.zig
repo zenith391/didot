@@ -71,19 +71,19 @@ const IHDR = struct {
     interlaceMethod: u8
 };
 
-fn filterNone(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+inline fn filterNone(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
     return sample;
 }
 
-fn filterSub(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+inline fn filterSub(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
     return if (x < bytes) sample else sample +% image[pos-bytes];
 }
 
-fn filterUp(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+inline fn filterUp(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
     return if (y == 0) sample else sample +% image[pos-width];
 }
 
-fn filterAverage(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+inline fn filterAverage(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
     var val: u9 = if (x >= bytes) image[pos-bytes] else 0;
     if (y > 0) {
         val += image[pos-width]; // val = a + b
@@ -91,7 +91,7 @@ fn filterAverage(image: []const u8, sample: u8, x: u32, y: u32, width: usize, po
     return sample +% @truncate(u8, val / 2);
 }
 
-fn filterPaeth(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+inline fn filterPaeth(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
     const a: i10 = if (x >= bytes) image[pos-bytes] else 0;
     const b: i10 = if (y > 0) image[pos-width] else 0;
     const c: i10 = if (x >= bytes and y > 0) image[pos-width-bytes] else 0;
@@ -183,9 +183,10 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
     var zlibStream = try std.compress.zlib.zlibStream(allocator, idatStream.reader());
     defer zlibStream.deinit();
     var zlibReader = zlibStream.reader();
-    const idatReader = (std.io.BufferedReader(64*1024, @TypeOf(zlibReader)) { 
+    var idatBuffer = (std.io.BufferedReader(64*1024, @TypeOf(zlibReader)) { 
         .unbuffered_reader = zlibReader
-    }).reader();
+    });
+    const idatReader = idatBuffer.reader();
 
     // allocate image data (TODO: support more than RGB)
     var bpp: u32 = 3;
@@ -214,6 +215,8 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
                     while (x < bytesPerLine) {
                         const pos = offset + x;
                         imageData[pos] = filter(imageData, line[x], x, y, bytesPerLine, pos, 3);
+                        //const opts: std.builtin.CallOptions = .{.modifier = .always_inline};
+                        //imageData[pos] = @call(opts, filter, .{imageData, line[x], x, y, bytesPerLine, pos, 3});
                         x += 1;
                         imageData[pos+1] = filter(imageData, line[x], x, y, bytesPerLine, pos+1, 3);
                         x += 1;

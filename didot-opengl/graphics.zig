@@ -336,14 +336,6 @@ fn textureLoadImage(allocator: *Allocator, stream: *AssetStream, format: []const
     return TextureAssetLoaderError.InvalidFormat;
 }
 
-// struct used to pass data between main thread and worker threads
-const CubemapThreadStruct = struct {
-    allocator: *Allocator, path: []const u8, format: []const u8, image: Image
-};
-fn cubemapThread(data: *CubemapThreadStruct) !void {
-    data.image = try nosuspend textureLoadImage(data.allocator, data.path, data.format);
-}
-
 inline fn getTextureFormat(format: image.ImageFormat) c.GLuint {
     if (std.meta.eql(format, image.ImageFormat.RGB24)) {
         return c.GL_RGB;
@@ -455,14 +447,15 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
     }
 
     var assets = &scene.assetManager;
-    if (scene.camera) |camera| {
+    if (scene.camera) |cameraObject| {
+        const camera = cameraObject.getComponent(Camera).?;
         const projMatrix = switch (camera.projection) {
             .Perspective => |p| zlm.Mat4.createPerspective(p.fov, vp.z / vp.w, p.near, p.far),
             .Orthographic => |p| zlm.Mat4.createOrthogonal(p.left, p.right, p.bottom, p.top, p.near, p.far)
         };
 
         // create the direction vector to be used with the view matrix.
-        const transform = camera.gameObject.getComponent(objects.Transform).?;
+        const transform = cameraObject.getComponent(objects.Transform).?;
         const yaw = transform.rotation.x;
         const pitch = transform.rotation.y;
         const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch)).normalize();

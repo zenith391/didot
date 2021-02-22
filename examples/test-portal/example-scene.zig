@@ -93,7 +93,7 @@ fn playerSystem(controller: *PlayerController, rb: *physics.Rigidbody) !void {
 
 fn loadSkybox(allocator: *Allocator, camera: *Camera) !GameObject {
     var skyboxShader = try ShaderProgram.createFromFile(allocator, "assets/shaders/skybox-vert.glsl", "assets/shaders/skybox-frag.glsl");
-    camera.*.skyboxShader = skyboxShader;
+    camera.skyboxShader = skyboxShader;
 
     const asset = &scene.assetManager;
 
@@ -153,19 +153,20 @@ fn init(allocator: *Allocator, app: *App) !void {
         });
     try scene.add(player);
 
-    var camera = try Camera.create(allocator, shader);
-    camera.gameObject.getComponent(Transform).?.* = .{
+    var camera = try GameObject.createObject(allocator, null);
+    try camera.addComponent(Camera { .shader = shader });
+    camera.getComponent(Transform).?.* = .{
         .position = Vec3.new(1.5, 3.5, -0.5),
         .rotation = Vec3.new(-120.0, -15.0, 0).toRadians()
     };
-    camera.gameObject.name = "Camera";
-    try camera.gameObject.addComponent(CameraController {
+    camera.name = "Camera";
+    try camera.addComponent(CameraController {
         .input = &app.window.input,
         .player = scene.findChild("Player").?
     });
-    try scene.add(camera.gameObject);
+    try scene.add(camera);
 
-    const skybox = try loadSkybox(allocator, camera);
+    const skybox = try loadSkybox(allocator, camera.getComponent(Camera).?);
     try scene.add(skybox);
 
     var cube = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
@@ -200,7 +201,10 @@ var gp: std.heap.GeneralPurposeAllocator(.{}) = .{};
 
 pub fn main() !void {
     defer _ = gp.deinit();
-    const allocator = &gp.allocator;
+    const gpa_allocator = &gp.allocator;
+    //var logging = std.heap.loggingAllocator(gpa_allocator, std.io.getStdOut().writer());
+    //const allocator = &logging.allocator;
+    const allocator = gpa_allocator;
 
     var app = App {
         .title = "Test Room",

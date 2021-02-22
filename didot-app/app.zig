@@ -76,6 +76,7 @@ pub fn Application(comptime systems: Systems) type {
             self.scene = scene;
             errdefer scene.deinit();
             self.window = window;
+            self.window.setMain();
             self.allocator = allocator;
             self.timer = try std.time.Timer.start();
             objects.initPrimitives();
@@ -213,6 +214,10 @@ pub fn Application(comptime systems: Systems) type {
                 thread.wait(); // thread must be closed before scene is de-init (to avoid use-after-free)
             }
             self.closing = false;
+            self.deinit();
+        }
+
+        pub fn deinit(self: *Self) void {
             self.window.deinit();
             self.scene.deinitAll();
         }
@@ -227,6 +232,10 @@ pub fn Application(comptime systems: Systems) type {
     return App;
 }
 
-comptime {
-    //std.testing.refAllDecls(Application);
+test "app" {
+    comptime var systems = Systems {};
+    var app = Application(systems) {};
+    try app.init(std.testing.allocator, try Scene.create(std.testing.allocator, null));
+    app.window.setShouldClose(true);
+    try app.loop();
 }

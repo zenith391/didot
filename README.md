@@ -46,13 +46,16 @@ const Allocator = std.mem.Allocator;
 fn init(allocator: *Allocator, app: *Application) !void {
     var shader = try ShaderProgram.create(@embedFile("vert.glsl"), @embedFile("frag.glsl"));
 
-    var camera = try Camera.create(allocator, shader);
-    camera.gameObject.position = Vec3.new(1.5, 1.5, -0.5);
-    camera.gameObject.rotation = Vec3.new(-120.0, -15.0, 0).toRadians();
+    var camera = try GameObject.createObject(allocator, null);
+    camera.getComponent(Transform).?.* = .{
+        .position = Vec3.new(1.5, 1.5, -0.5),
+        .rotation = Vec3.new(-120.0, -15.0, 0).toRadians()
+    };
+    try camera.addComponent(Camera { .shader = shader });
     try app.scene.add(camera.gameObject);
     
-    var cube = GameObject.createObject(allocator, "Mesh/Cube");
-    cube.position = Vec3.new(-1.2, 0.75, -3);
+    var cube = try GameObject.createObject(allocator, "Mesh/Cube");
+    cube.getComponent(Transform).?.position = Vec3.new(-1.2, 0.75, -3);
     try app.scene.add(cube);
 }
 
@@ -61,7 +64,8 @@ pub fn main() !void {
     const allocator = &gp.allocator;
 
     var scene = try Scene.create(allocator, null);
-    var app = Application {
+    comptime var systems = Systems {};
+    var app = Application(systems) {
         .title = "Test Cube",
         .initFn = init
     };
@@ -80,7 +84,28 @@ First line loads `assets/textures/grass.png` to `Texture/Grass`.
 Second line creates a Material with the `Texture/Grass` texture.  
 Third line links the cube to the newly created Material.
 
-You can also look at the [kart and cubes example](https://github.com/zenith391/didot/blob/master/examples/kart-and-cubes/example-scene.zig) to see how to make camera movement or load models from OBJ files or even load scenes from JSON files.
+You can also look at the [example](https://github.com/zenith391/didot/blob/master/examples/test-portal/example-scene.zig) to see how to make camera movement or load models from OBJ files or even load scenes from JSON files.
+
+Systems (currently):
+```zig
+fn exampleSystem(query: Query(.{*Transform})) !void {
+    var iterator = query.iterator();
+    while (iterator.next()) |o| {
+        std.log.info("Someone's at position {} !", .{o.transform.position});
+    }
+}
+
+pub fn main() !void {
+    // ...
+    comptime var systems = Systems {};
+    systems.addSystem(exampleSystem);
+    var app = Application(systems) {
+        .title = "Test Cube",
+        .initFn = init
+    };
+    try app.run(allocator, scene);
+}
+```
 
 ## How to use
 

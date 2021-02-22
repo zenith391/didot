@@ -224,12 +224,14 @@ pub const Asset = struct {
     stream: AssetStream = undefined,
 
     pub inline fn loadAsync(self: *Asset, allocator: *Allocator) !void {
-        if (self.loader) |loader| {
-            self.loaderFrameBuffer = try allocator.alignedAlloc(u8, 16, @frameSize(loader));
-            self.loaderFrame = @asyncCall(self.loaderFrameBuffer, &self.loaderFrameResult, loader,
-                .{allocator, self.loaderData, &self.stream});
-        } else {
-            return error.NoLoader;
+        if (std.io.is_async) {
+            if (self.loader) |loader| {
+                self.loaderFrameBuffer = try allocator.alignedAlloc(u8, 16, @frameSize(loader));
+                self.loaderFrame = @asyncCall(self.loaderFrameBuffer, &self.loaderFrameResult, loader,
+                    .{allocator, self.loaderData, &self.stream});
+            } else {
+                return error.NoLoader;
+            }
         }
     }
 
@@ -339,21 +341,23 @@ pub const AssetManager = struct {
     }
 
     pub fn comptimeAutoLoad(self: *AssetManager, allocator: *Allocator) !void {
-        inline for (@typeInfo(@import("didot-assets-embed")).Struct.decls) |decl| {
-            const value = @field(@import("didot-assets-embed"), decl.name);
+        if (false) {
+            inline for (@typeInfo(@import("didot-assets-embed")).Struct.decls) |decl| {
+                const value = @field(@import("didot-assets-embed"), decl.name);
 
-            const ext = std.fs.path.extension(decl.name);
-            var asset: ?Asset = null;
-            inline for (textureExtensions) |expected| {
-                if (std.mem.eql(u8, ext, expected)) {
-                    asset = try TextureAsset.init2D(allocator, expected[1..]);
+                const ext = std.fs.path.extension(decl.name);
+                var asset: ?Asset = null;
+                inline for (textureExtensions) |expected| {
+                    if (std.mem.eql(u8, ext, expected)) {
+                        asset = try TextureAsset.init2D(allocator, expected[1..]);
+                    }
                 }
-            }
-            if (asset) |*ast| {
-                ast.stream = try AssetStream.bufferStream(value);
-                try self.put(decl.name, ast.*);
-            } else {
-                std.log.warn("No corresponding asset type for {s}", .{decl.name});
+                if (asset) |*ast| {
+                    ast.stream = try AssetStream.bufferStream(value);
+                    try self.put(decl.name, ast.*);
+                } else {
+                    std.log.warn("No corresponding asset type for {s}", .{decl.name});
+                }
             }
         }
     }

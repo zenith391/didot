@@ -71,19 +71,19 @@ const IHDR = struct {
     interlaceMethod: u8
 };
 
-inline fn filterNone(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+fn filterNone(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) callconv(.Inline) u8 {
     return sample;
 }
 
-inline fn filterSub(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+fn filterSub(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) callconv(.Inline) u8 {
     return if (x < bytes) sample else sample +% image[pos-bytes];
 }
 
-inline fn filterUp(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+fn filterUp(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) callconv(.Inline) u8 {
     return if (y == 0) sample else sample +% image[pos-width];
 }
 
-inline fn filterAverage(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+fn filterAverage(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) callconv(.Inline) u8 {
     var val: u9 = if (x >= bytes) image[pos-bytes] else 0;
     if (y > 0) {
         val += image[pos-width]; // val = a + b
@@ -91,7 +91,7 @@ inline fn filterAverage(image: []const u8, sample: u8, x: u32, y: u32, width: us
     return sample +% @truncate(u8, val / 2);
 }
 
-inline fn filterPaeth(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8 {
+fn filterPaeth(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) callconv(.Inline) u8 {
     const a: i10 = if (x >= bytes) image[pos-bytes] else 0;
     const b: i10 = if (y > 0) image[pos-width] else 0;
     const c: i10 = if (x >= bytes and y > 0) image[pos-width-bytes] else 0;
@@ -196,7 +196,7 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
     const imageData = try allocator.alloc(u8, ihdr.width*ihdr.height*bpp);
     var y: u32 = 0;
 
-    const Filter = fn(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) u8;
+    const Filter = fn(image: []const u8, sample: u8, x: u32, y: u32, width: usize, pos: usize, bytes: u8) callconv(.Inline) u8;
     const filters = [_]Filter {filterNone, filterSub, filterUp, filterAverage, filterPaeth};
 
     if (ihdr.colorType == .Truecolor) {

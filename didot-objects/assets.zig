@@ -223,7 +223,7 @@ pub const Asset = struct {
     /// Used for the loader
     stream: AssetStream = undefined,
 
-    pub inline fn loadAsync(self: *Asset, allocator: *Allocator) !void {
+    pub fn loadAsync(self: *Asset, allocator: *Allocator) !void {
         if (std.io.is_async) {
             if (self.loader) |loader| {
                 self.loaderFrameBuffer = try allocator.alignedAlloc(u8, 16, @frameSize(loader));
@@ -386,7 +386,7 @@ pub const AssetManager = struct {
 
     /// Checks whether an asset's type match the 'expected argument'.
     /// For performance reasons, isType always return true in ReleaseSmall and ReleaseFast modes.
-    pub inline fn isType(self: *AssetManager, key: []const u8, expected: AssetType) bool {
+    pub fn isType(self: *AssetManager, key: []const u8, expected: AssetType) bool {
         if (runtime_safety) {
             if (self.assets.get(key)) |asset| {
                 return asset.objectType == expected;

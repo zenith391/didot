@@ -151,11 +151,11 @@ pub const ShaderProgram = struct {
         };
     }
 
-    pub inline fn bind(self: *const ShaderProgram) void {
+    pub fn bind(self: *const ShaderProgram) void {
         c.glUseProgram(self.id);
     }
 
-    inline fn getUniformLocation(self: *ShaderProgram, name: [:0]const u8) c.GLint {
+    fn getUniformLocation(self: *ShaderProgram, name: [:0]const u8) c.GLint {
         if (self.uniformLocations.get(name)) |location| {
             return location;
         } else {
@@ -170,7 +170,7 @@ pub const ShaderProgram = struct {
         }
     }
 
-    inline fn isUniformSame(self: *ShaderProgram, name: [:0]const u8, bytes: []const u8) bool {
+    fn isUniformSame(self: *ShaderProgram, name: [:0]const u8, bytes: []const u8) bool {
         const hash = std.hash.Crc32.hash(bytes);
         defer {
             self.uniformHashes.put(name, hash) catch {}; // again, as this is an optimization, it is not fatal if we can't put it in the map
@@ -274,7 +274,7 @@ pub const Texture = struct {
         return Texture { .id = id };
     }
 
-    pub inline fn bind(self: *const Texture) void {
+    pub fn bind(self: *const Texture) void {
         c.glBindTexture(c.GL_TEXTURE_2D, self.id);
     }
 
@@ -336,7 +336,7 @@ fn textureLoadImage(allocator: *Allocator, stream: *AssetStream, format: []const
     return TextureAssetLoaderError.InvalidFormat;
 }
 
-inline fn getTextureFormat(format: image.ImageFormat) c.GLuint {
+fn getTextureFormat(format: image.ImageFormat) c.GLuint {
     if (std.meta.eql(format, image.ImageFormat.RGB24)) {
         return c.GL_RGB;
     } else if (std.meta.eql(format, image.ImageFormat.BGR24)) {

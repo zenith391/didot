@@ -22,12 +22,12 @@ pub const Component = struct {
     }
 
     /// Get the type name of this component.
-    pub inline fn getName(self: *const Component) []const u8 {
+    pub fn getName(self: *const Component) []const u8 {
         return self.name.*;
     }
 
     /// Get the data, as type T, holded in this component.
-    pub inline fn getData(self: *const Component, comptime T: type) *T {
+    pub fn getData(self: *const Component, comptime T: type) *T {
         if (@sizeOf(T) == 0) {
             return undefined;
         } else {

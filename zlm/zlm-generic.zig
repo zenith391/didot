@@ -181,7 +181,7 @@ pub fn specializeOn(comptime Real: type) type {
 
             usingnamespace VectorMixin(Self);
 
-            pub inline fn new(x: Real, y: Real) Self {
+            pub fn new(x: Real, y: Real) Self {
                 return Self{
                     .x = x,
                     .y = y,
@@ -227,7 +227,7 @@ pub fn specializeOn(comptime Real: type) type {
 
             usingnamespace VectorMixin(Self);
 
-            pub inline fn new(x: Real, y: Real, z: Real) Self {
+            pub fn new(x: Real, y: Real, z: Real) Self {
                 return Self{
                     .x = x,
                     .y = y,
@@ -333,7 +333,7 @@ pub fn specializeOn(comptime Real: type) type {
 
             usingnamespace VectorMixin(Self);
 
-            pub inline fn new(x: Real, y: Real, z: Real, w: Real) Self {
+            pub fn new(x: Real, y: Real, z: Real, w: Real) Self {
                 return Self{
                     .x = x,
                     .y = y,
@@ -647,17 +647,17 @@ pub fn specializeOn(comptime Real: type) type {
         };
 
         /// constructs a new Vec2.
-        pub inline fn vec2(x: Real, y: Real) Vec2 {
+        pub fn vec2(x: Real, y: Real) Vec2 {
             return Vec2.new(x, y);
         }
 
         /// constructs a new Vec3.
-        pub inline fn vec3(x: Real, y: Real, z: Real) Vec3 {
+        pub fn vec3(x: Real, y: Real, z: Real) Vec3 {
             return Vec3.new(x, y, z);
         }
 
         /// constructs a new Vec4.
-        pub inline fn vec4(x: Real, y: Real, z: Real, w: Real) Vec4 {
+        pub fn vec4(x: Real, y: Real, z: Real, w: Real) Vec4 {
             return Vec4.new(x, y, z, w);
         }
     };

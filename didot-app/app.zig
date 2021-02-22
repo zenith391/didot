@@ -104,7 +104,7 @@ pub fn Application(comptime systems: Systems) type {
             }
         }
 
-        inline fn printErr(err: anyerror) void {
+        fn printErr(err: anyerror) void {
             std.log.err("{s}", .{@errorName(err)});
             if (@errorReturnTrace()) |trace| {
                 std.debug.dumpStackTrace(trace.*);

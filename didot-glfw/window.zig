@@ -266,11 +266,11 @@ pub const Window = struct {
         return Vec2.new(@intToFloat(f32, width), @intToFloat(f32, height));
     }
 
-    pub inline fn makeContextCurrent(self: *Window) void {
+    pub fn makeContextCurrent(self: *Window) void {
         c.glfwMakeContextCurrent(self.nativeId);
     }
 
-    pub inline fn setMain(self: *Window) void {
+    pub fn setMain(self: *Window) void {
         mainWindow = self;
     }
 

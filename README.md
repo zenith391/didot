@@ -52,7 +52,7 @@ fn init(allocator: *Allocator, app: *Application) !void {
         .rotation = Vec3.new(-120.0, -15.0, 0).toRadians()
     };
     try camera.addComponent(Camera { .shader = shader });
-    try app.scene.add(camera.gameObject);
+    try app.scene.add(camera);
     
     var cube = try GameObject.createObject(allocator, "Mesh/Cube");
     cube.getComponent(Transform).?.position = Vec3.new(-1.2, 0.75, -3);

@@ -1,6 +1,6 @@
 const c = @import("c.zig");
 const std = @import("std");
-const zlm = @import("zlm");
+const zalgebra = @import("zalgebra");
 const Thread = std.Thread;
 const Allocator = std.mem.Allocator;
 
@@ -60,13 +60,13 @@ pub const Mesh = struct {
 
 /// Color defined to be a 3 component vector
 /// X value is red, Y value is blue and Z value is green.
-pub const Color = zlm.Vec3;
+pub const Color = zalgebra.vec3;
 
 pub const Material = struct {
     texture: ?AssetHandle = null,
-    ambient: Color = Color.zero,
-    diffuse: Color = Color.one,
-    specular: Color = Color.one,
+    ambient: Color = Color.zero(),
+    diffuse: Color = Color.one(),
+    specular: Color = Color.one(),
     shininess: f32 = 32.0,
 
     pub const default = Material{};
@@ -183,10 +183,10 @@ pub const ShaderProgram = struct {
     }
 
     /// Set an OpenGL uniform to the following 4x4 matrix.
-    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, val: zlm.Mat4) void {
+    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, val: zalgebra.mat4) void {
         if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
         var uniform = self.getUniformLocation(name);
-        c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, &val.fields[0][0]);
+        c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, val.get_data());
     }
 
     /// Set an OpenGL uniform to the following boolean.
@@ -205,7 +205,7 @@ pub const ShaderProgram = struct {
     }
 
     /// Set an OpenGL uniform to the following 3D float vector.
-    pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, val: zlm.Vec3) void {
+    pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, val: zalgebra.vec3) void {
         if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
         var uniform = self.getUniformLocation(name);
         c.glUniform3f(uniform, val.x, val.y, val.z);
@@ -250,7 +250,7 @@ pub const Texture = struct {
     id: c.GLuint,
     width: usize = 0,
     height: usize = 0,
-    tiling: zlm.Vec2 = zlm.Vec2.new(1, 1),
+    tiling: zalgebra.vec2 = zalgebra.vec2.new(1, 1),
 
     pub fn createEmptyCubemap() Texture {
         var id: c.GLuint = undefined;
@@ -287,7 +287,7 @@ pub const Texture = struct {
 pub const TextureAsset = struct {
     pub fn init2D(allocator: *Allocator, format: []const u8) !Asset {
         var data = try allocator.create(TextureAssetLoaderData);
-        data.tiling = zlm.Vec2.new(0, 0);
+        data.tiling = zalgebra.vec2.new(0, 0);
         data.cubemap = null;
         data.format = format;
         return Asset {
@@ -322,7 +322,7 @@ pub const TextureAsset = struct {
 pub const TextureAssetLoaderData = struct {
     cubemap: ?CubemapSettings = null,
     format: []const u8,
-    tiling: zlm.Vec2 = zlm.Vec2.new(1, 1)
+    tiling: zalgebra.vec2 = zalgebra.vec2.new(1, 1)
 };
 
 pub const TextureAssetLoaderError = error{InvalidFormat};
@@ -421,18 +421,18 @@ const AssetHandle = objects.AssetHandle;
 /// Set this function to replace normal pre-render behaviour (GL state, clear, etc.), it happens after viewport
 pub var preRender: ?fn() void = null;
 /// Set this function to replace normal viewport behaviour
-pub var viewport: ?fn() zlm.Vec4 = null;
+pub var viewport: ?fn() zalgebra.vec4 = null;
 
 pub fn renderScene(scene: *Scene, window: Window) !void {
     const size = window.getFramebufferSize();
-    try renderSceneOffscreen(scene, if (viewport) |func| func() else zlm.vec4(0, 0, size.x, size.y));
+    try renderSceneOffscreen(scene, if (viewport) |func| func() else zalgebra.vec4.new(0, 0, size.x, size.y));
 }
 
 var renderHeld: @typeInfo(@TypeOf(std.Thread.Mutex.acquire)).Fn.return_type.? = undefined;
 
 /// Internal method for rendering a game scene.
 /// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)
-pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
+pub fn renderSceneOffscreen(scene: *Scene, vp: zalgebra.vec4) !void {
     renderHeld = windowContextLock();
     defer renderHeld.release();
     c.glViewport(@floatToInt(c_int, @floor(vp.x)), @floatToInt(c_int, @floor(vp.y)),
@@ -450,20 +450,30 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
     if (scene.camera) |cameraObject| {
         const camera = cameraObject.getComponent(Camera).?;
         const projMatrix = switch (camera.projection) {
-            .Perspective => |p| zlm.Mat4.createPerspective(p.fov, vp.z / vp.w, p.near, p.far),
-            .Orthographic => |p| zlm.Mat4.createOrthogonal(p.left, p.right, p.bottom, p.top, p.near, p.far)
+            .Perspective => |p| zalgebra.mat4.perspective(p.fov, vp.z / vp.w, p.near, p.far),
+            .Orthographic => |p| zalgebra.mat4.orthographic(p.left, p.right, p.bottom, p.top, p.near, p.far)
         };
 
         // create the direction vector to be used with the view matrix.
         const transform = cameraObject.getComponent(objects.Transform).?;
-        const yaw = transform.rotation.x;
-        const pitch = transform.rotation.y;
-        const direction = zlm.Vec3.new(std.math.cos(yaw) * std.math.cos(pitch), std.math.sin(pitch), std.math.sin(yaw) * std.math.cos(pitch)).normalize();
-        const viewMatrix = zlm.Mat4.createLookAt(transform.position, transform.position.add(direction), zlm.Vec3.new(0.0, 1.0, 0.0));
+        const euler = transform.rotation.extract_rotation();
+        const yaw = zalgebra.to_radians(euler.x);
+        const pitch = zalgebra.to_radians(euler.y);
+        const direction = zalgebra.vec3.new(
+            std.math.cos(yaw) * std.math.cos(pitch),
+            std.math.sin(pitch),
+            std.math.sin(yaw) * std.math.cos(pitch)
+        ).norm();
+        const viewMatrix = zalgebra.mat4.look_at(transform.position, transform.position.add(direction), zalgebra.vec3.new(0.0, 1.0, 0.0));
+        // const viewMatrix = zalgebra.mat4.from_translate(transform.position)
+        //    .mult(transform.rotation.to_mat4());
+
+        //const viewMatrix = zalgebra.mat4.from_translate(transform.position).mult(zalgebra.mat4.identity());
 
         if (camera.skybox) |*skybox| {
             skybox.shader.bind();
-            const view = viewMatrix.toMat3().toMat4();
+            const view = zalgebra.mat4.identity()
+                .mult(zalgebra.mat4.from_euler_angle(viewMatrix.extract_rotation()));
             skybox.shader.setUniformMat4("view", view);
             skybox.shader.setUniformMat4("projection", projMatrix);
             try renderSkybox(skybox, assets, camera);
@@ -471,14 +481,6 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
 
         camera.shader.bind();
         camera.shader.setUniformMat4("projMatrix", projMatrix);
-
-        // const rotMatrix = zlm.Mat4.identity
-        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), camera.gameObject.rotation.y))
-        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), -camera.gameObject.rotation.x))
-        //     .mul(zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), 0));
-        //const rotMatrix = zlm.Mat4.createAngleAxis(direction, std.math.pi / 2.0);
-        //const viewMatrix = rotMatrix;
-
         camera.shader.setUniformMat4("viewMatrix", viewMatrix);
         if (scene.pointLight) |light| {
             const lightData = light.getComponent(objects.PointLight).?;
@@ -495,7 +497,7 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zlm.Vec4) !void {
 
         const held = scene.treeLock.acquire();
         for (scene.objects.items) |gameObject| {
-            try renderObject(gameObject, assets, camera, zlm.Mat4.identity);
+            try renderObject(gameObject, assets, camera, zalgebra.mat4.identity());
         }
         held.release();
     }
@@ -520,18 +522,9 @@ fn renderSkybox(skybox: *objects.Skybox, assets: *AssetManager, camera: *Camera)
 }
 
 // TODO: remake parent matrix with the new system
-fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera, parentMatrix: zlm.Mat4) anyerror!void {
+fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera, parentMatrix: zalgebra.mat4) anyerror!void {
     if (gameObject.getComponent(objects.Transform)) |transform| {
-        const rotMatrix = 
-            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 0, 1), transform.rotation.z).mul(
-            zlm.Mat4.createAngleAxis(zlm.Vec3.new(0, 1, 0), transform.rotation.y).mul(
-            zlm.Mat4.createAngleAxis(zlm.Vec3.new(1, 0, 0), transform.rotation.x)));
-        const matrix = 
-            zlm.Mat4.identity
-            .mul(zlm.Mat4.createScale(transform.scale))
-            .mul(rotMatrix)
-            .mul(zlm.Mat4.createTranslation(transform.position))
-            .mul(parentMatrix);
+        const matrix = zalgebra.mat4.recompose(transform.position, transform.rotation, transform.scale);
         if (gameObject.mesh) |handle| {
             renderHeld.release();
             const mesh = try handle.get(Mesh, assets.allocator);

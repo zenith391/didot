@@ -295,7 +295,9 @@ pub const AssetError = error {
 const AssetMap = std.StringHashMap(Asset);
 
 const TextureAsset = @import("didot-graphics").TextureAsset;
+const MeshAsset = @import("didot-models").MeshAsset;
 const textureExtensions = [_][]const u8 {".png", ".bmp"};
+const meshExtensions = [_][]const u8 {".obj"};
 
 pub const AssetManager = struct {
     assets: AssetMap,
@@ -328,6 +330,11 @@ pub const AssetManager = struct {
                 inline for (textureExtensions) |expected| {
                     if (std.mem.eql(u8, ext, expected)) {
                         asset = try TextureAsset.init2D(allocator, expected[1..]);
+                    }
+                }
+                inline for (meshExtensions) |expected| {
+                    if (std.mem.eql(u8, ext, expected)) {
+                        asset = try MeshAsset.init(allocator, expected[1..]);
                     }
                 }
                 if (asset) |*ast| {

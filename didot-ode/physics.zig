@@ -1,5 +1,5 @@
 const std = @import("std");
-const zlm = @import("zlm");
+const zalgebra = @import("zalgebra");
 const objects = @import("didot-objects");
 const c = @cImport({
     @cDefine("dSINGLE", "1");
@@ -10,6 +10,8 @@ const Allocator = std.mem.Allocator;
 const Component = objects.Component;
 const GameObject = objects.GameObject;
 const Transform = objects.Transform;
+
+const Vec3 = zalgebra.vec3;
 
 var isOdeInit: bool = false;
 const logger = std.log.scoped(.didot);
@@ -74,7 +76,7 @@ pub const World = struct {
         }
     }
 
-    pub fn setGravity(self: *World, gravity: zlm.Vec3) void {
+    pub fn setGravity(self: *World, gravity: Vec3) void {
         c.dWorldSetGravity(self.id, gravity.x, gravity.y, gravity.z);
         c.dWorldSetAutoDisableFlag(self.id, 1);
         c.dWorldSetAutoDisableLinearThreshold(self.id, 0.1);
@@ -115,7 +117,7 @@ pub const SphereCollider = struct {
 };
 
 pub const BoxCollider = struct {
-    size: zlm.Vec3 = zlm.Vec3.new(1, 1, 1)
+    size: Vec3 = Vec3.new(1, 1, 1)
 };
 
 pub const Collider = union(enum) {
@@ -141,19 +143,19 @@ pub const Rigidbody = struct {
     /// Internal value (ODE dMass)
     _mass: c.dMass = undefined,
 
-    pub fn addForce(self: *Rigidbody, force: zlm.Vec3) void {
+    pub fn addForce(self: *Rigidbody, force: Vec3) void {
         c.dBodyEnable(self._body);
         c.dBodyAddForce(self._body, force.x, force.y, force.z);
     }
 
-    pub fn setPosition(self: *Rigidbody, position: zlm.Vec3) void {
+    pub fn setPosition(self: *Rigidbody, position: Vec3) void {
         c.dBodySetPosition(self._body, position.x, position.y, position.z);
         self.transform.position = position;
     }
 };
 
-fn quatToEuler(q: [*]const c.dReal) zlm.Vec3 {
-    var angles = zlm.Vec3.new(0, 0, 0);
+fn quatToEuler(q: [*]const c.dReal) Vec3 {
+    var angles = Vec3.new(0, 0, 0);
     const sinr_cosp = 2.0 * (q[0] * q[1] + q[2] * q[3]);
     const cosr_cosp = 1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2]);
     angles.z = std.math.atan2(c.dReal, sinr_cosp, cosr_cosp);
@@ -197,9 +199,9 @@ pub fn rigidbodySystem(query: objects.Query(.{*Rigidbody, *Transform})) !void {
             const scale = transform.scale;
             //c.dGeomBoxSetLengths(data._geom, scale.x, scale.y, scale.z);
             const pos = c.dBodyGetPosition(data._body);
-            const rot = quatToEuler(c.dBodyGetQuaternion(data._body));
-            transform.rotation = rot;
-            transform.position = zlm.Vec3.new(pos[0], pos[1], pos[2]);
+            const raw = c.dBodyGetQuaternion(data._body);
+            transform.rotation = zalgebra.quat.new(raw[0], raw[1], raw[2], raw[3]);
+            transform.position = Vec3.new(pos[0], pos[1], pos[2]);
         }
     }
 }

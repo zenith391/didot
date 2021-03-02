@@ -1,17 +1,16 @@
 const std = @import("std");
-const zlm = @import("zlm");
+const zalgebra = @import("zalgebra");
 const physics = @import("didot-physics");
-const Vec3 = zlm.Vec3;
+const Vec3 = zalgebra.vec3;
+const Quat = zalgebra.quat;
 const Allocator = std.mem.Allocator;
+const rad = zalgebra.to_radians;
 
 usingnamespace @import("didot-graphics");
 usingnamespace @import("didot-objects");
 usingnamespace @import("didot-app");
 
 var world: physics.World = undefined;
-var simPaused: bool = false;
-var r = std.rand.DefaultPrng.init(0);
-
 var scene: *Scene = undefined;
 
 //pub const io_mode = .evented;
@@ -34,15 +33,19 @@ fn cameraSystem(controller: *CameraController, transform: *Transform) !void {
 
     if (input.isMouseButtonDown(.Left)) {
         input.setMouseInputMode(.Grabbed);
-        simPaused = false;
     } else if (input.isMouseButtonDown(.Right) or input.isKeyDown(Input.KEY_ESCAPE)) {
         input.setMouseInputMode(.Normal);
     }
 
     if (input.getMouseInputMode() == .Grabbed) {
         const delta = 1.0; // TODO: put delta in Application struct
-        transform.rotation.x -= (input.mouseDelta.x / 300.0) * delta;
-        transform.rotation.y -= (input.mouseDelta.y / 300.0) * delta;
+        var euler = transform.rotation.extract_rotation();
+        euler.x += (input.mouseDelta.x / 3.0) * delta;
+        euler.y -= (input.mouseDelta.y / 3.0) * delta;
+        if (euler.y > 89) euler.y = 89;
+        if (euler.y < -89) euler.y = -89;
+
+        transform.rotation = Quat.from_euler_angle(euler);
     }
 }
 
@@ -55,7 +58,7 @@ fn playerSystem(controller: *PlayerController, rb: *physics.Rigidbody) !void {
 
     const camera = scene.findChild("Camera").?.getComponent(Transform).?;
     var forward = camera.getForward();
-    const left = camera.getLeft();
+    const right = camera.getRight();
     forward.y = 0;
 
     if (input.isKeyDown(Input.KEY_W)) {
@@ -65,29 +68,13 @@ fn playerSystem(controller: *PlayerController, rb: *physics.Rigidbody) !void {
         rb.addForce(forward.scale(-speed));
     }
     if (input.isKeyDown(Input.KEY_A)) {
-        rb.addForce(left.scale(speed));
+        rb.addForce(right.scale(-speed));
     }
     if (input.isKeyDown(Input.KEY_D)) {
-        rb.addForce(left.scale(-speed));
+        rb.addForce(right.scale(speed));
     }
     if (input.isKeyDown(Input.KEY_SPACE)) {
         rb.addForce(Vec3.new(0, speed, 0));
-    }
-
-    if (input.isKeyDown(Input.KEY_UP)) {
-        // var cube2 = GameObject.createObject(allocator, "Mesh/Cube");
-        // cube2.position = Vec3.new(-1.2, 5.75, -3);
-        // const color = Vec3.new(r.random.float(f32), r.random.float(f32), r.random.float(f32));
-        // cube2.material.ambient = color.mul(Vec3.new(0.1, 0.1, 0.1));
-        // cube2.material.diffuse = color.mul(Vec3.new(0.9, 0.9, 0.9));
-        // try cube2.addComponent(try physics.Rigidbody.newWithData(allocator, .{
-        //    .world = &world,
-        //    .material = .{
-        //        .bounciness = 0.6
-        //    }
-        // }));
-        // const parent = gameObject.parent.?;
-        // try parent.add(cube2);
     }
 }
 
@@ -118,13 +105,12 @@ fn testSystem(query: Query(.{})) !void {
 }
 
 fn update() !void {
-     if (!simPaused)
-        world.update();
+    world.update();
 }
 
 fn init(allocator: *Allocator, app: *App) !void {
     world = physics.World.create();
-    world.setGravity(zlm.Vec3.new(0, -9.8, 0));
+    world.setGravity(Vec3.new(0, -9.8, 0));
 
     var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
     scene = app.scene;
@@ -143,18 +129,18 @@ fn init(allocator: *Allocator, app: *App) !void {
     player.name = "Player";
     try player.addComponent(PlayerController { .input = &app.window.input });
     try player.addComponent(physics.Rigidbody {
-            .world = &world,
-            .collider = .{
-                .Sphere = .{ .radius = 1.0 }
-            }
-        });
+        .world = &world,
+        .collider = .{
+            .Sphere = .{ .radius = 1.0 }
+        }
+    });
     try scene.add(player);
 
     var camera = try GameObject.createObject(allocator, null);
     try camera.addComponent(Camera { .shader = shader });
     camera.getComponent(Transform).?.* = .{
         .position = Vec3.new(1.5, 3.5, -0.5),
-        .rotation = Vec3.new(-120.0, -15.0, 0).toRadians()
+        .rotation = Quat.from_euler_angle(Vec3.new(-120, -15, 0))
     };
     camera.name = "Camera";
     try camera.addComponent(CameraController {
@@ -188,7 +174,7 @@ fn init(allocator: *Allocator, app: *App) !void {
 
     var light = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
     light.getComponent(Transform).?.position = Vec3.new(1, 5, -5);
-    light.material.ambient = Vec3.one;
+    light.material.ambient = Vec3.one();
     try light.addComponent(PointLight {});
     try scene.add(light);
 }
@@ -198,8 +184,6 @@ var gp: std.heap.GeneralPurposeAllocator(.{}) = .{};
 pub fn main() !void {
     defer _ = gp.deinit();
     const gpa_allocator = &gp.allocator;
-    //var logging = std.heap.loggingAllocator(gpa_allocator, std.io.getStdOut().writer());
-    //const allocator = &logging.allocator;
     const allocator = gpa_allocator;
 
     var app = App {

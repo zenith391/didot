@@ -1,5 +1,5 @@
 const graphics = @import("didot-graphics");
-const zlm = @import("zlm");
+const zalgebra = @import("zalgebra");
 const std = @import("std");
 
 pub usingnamespace @import("assets.zig");
@@ -9,6 +9,8 @@ const Mesh = graphics.Mesh;
 const Window = graphics.Window;
 const Material = graphics.Material;
 const Allocator = std.mem.Allocator;
+
+const Vec3 = zalgebra.vec3;
 
 pub const GameObjectArrayList = std.ArrayList(*GameObject);
 pub const ComponentMap = std.StringHashMap(Component);
@@ -222,25 +224,6 @@ pub const GameObject = struct {
     //     return null;
     // }
 
-    // pub fn look(self: *GameObject, direction: zlm.Vec3, up: zlm.Vec3) void {
-    //     // self.rotation.x = ((std.math.cos(direction.z)) * (std.math.cos(direction.x)) +1)* std.math.pi;
-    //     // self.rotation.y = (std.math.cos(direction.y) + 1) * std.math.pi;
-    //     // self.rotation.z = 0;
-    //     // const mat = zlm.Mat4.createLook(self.position, direction, up);
-    //     // self.rotation = mat.mulVec3(zlm.Vec3.new(0, 0, 1));
-    //     // self.rotation.x = (self.rotation.x * self.rotation.z) * std.math.pi;
-    //     // self.rotation.y = 0;
-    //     // self.rotation.z = 0;
-
-    //     var angle = std.math.atan2(f32, direction.y, direction.x);
-        
-    // }
-
-    // pub fn lookAt(self: *GameObject, target: zlm.Vec3, up: zlm.Vec3) void {
-    //     self.look(target.sub(self.position).normalize(), up);
-    // }
-
-
     // pub fn add(self: *GameObject, go: GameObject) !void {
     //     const held = self.treeLock.acquire();
     //     defer held.release();
@@ -278,31 +261,6 @@ pub const Projection = union(enum) {
     }
 };
 
-// pub const Camera = struct {
-//     gameObject: GameObject,
-//     shader: graphics.ShaderProgram,
-//     skyboxShader: ?graphics.ShaderProgram,
-//     projection: Projection,
-//     priority: u32 = 0,
-
-//     /// Memory is caller-owned (de-init must be called before)
-//     pub fn create(allocator: *Allocator, shader: graphics.ShaderProgram) !*Camera {
-//         var camera = try allocator.create(Camera);
-//         var go = try GameObject.createCustom(allocator, "camera", @ptrToInt(camera));
-//         go.getComponent(Transform).?.rotation = zlm.Vec3.new(zlm.toRadians(-90.0), 0, 0);
-//         camera.gameObject = go;
-//         camera.shader = shader;
-//         camera.projection = .{
-//             .Perspective = .{ .fov = 70, .far = 1000, .near = 0.1 }
-//         };
-//         return camera;
-//     }
-
-//     pub fn deinit(self: *Camera) void {
-//         self.gameObject.deinit();
-//     }
-// };
-
 pub const Skybox = struct {
     shader: graphics.ShaderProgram,
     cubemap: AssetHandle,
@@ -324,7 +282,7 @@ pub const Camera = struct {
 /// Add it to a GameObject for it to emit point light.
 pub const PointLight = struct {
     /// The color emitted by the light
-    color: graphics.Color = graphics.Color.one,
+    color: graphics.Color = graphics.Color.one(),
     /// Constant attenuation (the higher it is, the darker the light is)
     constant: f32 = 1.0,
     /// Linear attenuation
@@ -334,30 +292,34 @@ pub const PointLight = struct {
 };
 
 pub const Transform = struct {
-    position: zlm.Vec3 = zlm.Vec3.zero,
+    position: Vec3 = Vec3.zero(),
     /// In order: roll, pitch, yaw. Angles are in radians.
     /// Note: this will be replaced with quaternions very soon!
-    rotation: zlm.Vec3 = zlm.Vec3.zero,
-    scale: zlm.Vec3 = zlm.Vec3.one,
+    rotation: zalgebra.quat = zalgebra.quat.zero(),
+    scale: Vec3 = Vec3.one(),
     parent: ?*Transform = null,
 
     /// This functions returns the forward (the direction) vector of this game object using its rotation.
-    pub fn getForward(self: *const Transform) zlm.Vec3 {
-        const rot = self.rotation;
-        return zlm.Vec3.new(
-            std.math.cos(rot.x) * std.math.cos(rot.y),
-            std.math.sin(rot.y),
-            std.math.sin(rot.x) * std.math.cos(rot.y)
+    pub fn getForward(self: *const Transform) Vec3 {
+        const rot = self.rotation.extract_rotation();
+        const x = zalgebra.to_radians(rot.x);
+        const y = zalgebra.to_radians(rot.y);
+        return Vec3.new(
+            std.math.cos(x) * std.math.cos(y),
+            std.math.sin(y),
+            std.math.sin(x) * std.math.cos(y)
         );
     }
 
-    /// This functions returns the left vector of this game object using its rotation.
-    pub fn getLeft(self: *const Transform) zlm.Vec3 {
-        const rot = self.rotation;
-        return zlm.Vec3.new(
-            -std.math.sin(rot.x),
+    /// This functions returns the right vector of this game object using its rotation.
+    pub fn getRight(self: *const Transform) Vec3 {
+        const rot = self.rotation.extract_rotation();
+        const x = zalgebra.to_radians(rot.x);
+        const y = zalgebra.to_radians(rot.y);
+        return Vec3.new(
+            -std.math.sin(x),
             0,
-            std.math.cos(rot.x)
+            std.math.cos(x)
         );
     }
 };
@@ -425,7 +387,7 @@ pub const Scene = struct {
         held.release();
     }
 
-    pub fn renderOffscreen(self: *Scene, viewport: zlm.Vec4) !void {
+    pub fn renderOffscreen(self: *Scene, viewport: zalgebra.Vec4) !void {
         self.renderCommon();
         try graphics.renderSceneOffscreen(self, viewport);
     }

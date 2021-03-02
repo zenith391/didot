@@ -23,8 +23,8 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     const prefix = config.prefix;
 
     const zlm = Pkg {
-        .name = "zlm",
-        .path = prefix ++ "zlm/zlm.zig"
+        .name = "zalgebra",
+        .path = prefix ++ "zalgebra/src/main.zig"
     };
     const image = Pkg {
         .name = "didot-image",
@@ -197,7 +197,8 @@ pub fn build(b: *Builder) !void {
 
     const examples = [_][2][]const u8 {
         .{"test-portal", "examples/test-portal/example-scene.zig"},
-        .{"kart-and-cubes", "examples/kart-and-cubes/example-scene.zig"}
+        .{"kart-and-cubes", "examples/kart-and-cubes/example-scene.zig"},
+        .{"planet-test", "examples/planet-test/example-scene.zig"}
     };
 
     const engineConfig = EngineConfig {

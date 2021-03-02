@@ -7,8 +7,8 @@ pub const WindowError = error {
 };
 
 const std = @import("std");
-const zlm = @import("zlm");
-const Vec2 = zlm.Vec2;
+const zalgebra = @import("zalgebra");
+const Vec2 = zalgebra.vec2;
 
 var mainWindow: ?*Window = null;
 
@@ -16,8 +16,8 @@ var mainWindow: ?*Window = null;
 
 pub const Input = struct {
     nativeId: *c.GLFWwindow,
-    lastMousePos: Vec2 = Vec2.zero,
-    mouseDelta: Vec2 = Vec2.zero,
+    lastMousePos: Vec2 = Vec2.zero(),
+    mouseDelta: Vec2 = Vec2.zero(),
     firstFrame: bool = true,
 
     pub const KEY_A = c.GLFW_KEY_A;

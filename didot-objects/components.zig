@@ -15,7 +15,7 @@ pub const Component = struct {
         var copy = try allocator.create(T);
         copy.* = x;
         return Component {
-            .data = @ptrToInt(copy),
+            .data = if (@sizeOf(T) == 0) 0 else @ptrToInt(copy),
             .allocator = allocator,
             .name = @typeName(T),
         };
@@ -49,23 +49,25 @@ pub const ComponentOptions = struct {
 
 /// System selector to select objects where component T has just been created.
 pub fn Created(comptime T: type) type {
-
+    _ = T;
 }
 
 /// System selector to select objects without component T, you should feed a struct type instead of a pointer to struct type as the
 /// pointer info (const or not const) is not used for a Without query.
 pub fn Without(comptime T: type) type {
-
+    _ = T;
 }
 
 /// System selector to select objects with component T, you should feed a pointer to struct type as the
 /// pointer info (const or not const) is used for a With query.
 /// This is also the default system selector.
 pub fn With(comptime T: type) type {
+    _ = T;
     return struct {
         const is_condition = true;
 
         pub fn include(go: GameObject) bool {
+            _ = go;
             return true;
         }
     };
@@ -97,7 +99,8 @@ pub fn Query(comptime parameters: anytype) type {
         const Self = @This();
 
         scene: *objects.Scene,
-        const Result = comptime blk: {
+
+        const Result = blk: {
             const StructField = std.builtin.TypeInfo.StructField;
 
             var fields: []const StructField = &[0]StructField {};
@@ -116,7 +119,6 @@ pub fn Query(comptime parameters: anytype) type {
                 };
                 fields = fields ++ &[_]StructField {field};
             }
-
 
             const info = std.builtin.TypeInfo {
                 .Struct = .{
@@ -168,6 +170,8 @@ pub fn Query(comptime parameters: anytype) type {
         }
 
         pub fn parallelIterator(self: *const @This(), divides: usize) Iterator {
+            _ = self;
+            _ = divides;
             @compileError("TODO");
         }
 

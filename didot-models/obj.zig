@@ -5,8 +5,8 @@ const Mesh = graphics.Mesh;
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
-const Vec2 = zalgebra.vec2;
-const Vec3 = zalgebra.vec3;
+const Vec2 = zalgebra.Vec2;
+const Vec3 = zalgebra.Vec3;
 
 const OBJError = error {
 };
@@ -32,11 +32,11 @@ pub fn read_obj(allocator: *Allocator, unbufferedReader: anytype) !Mesh {
 
     const text = try reader.readAllAlloc(allocator, std.math.maxInt(u64));
     defer allocator.free(text);
-    var linesSplit = std.mem.split(text, "\n");
+    var linesSplit = std.mem.split(u8, text, "\n");
 
     while (true) {
         const line = if (linesSplit.next()) |s| s else break;
-        var split = std.mem.split(line, " ");
+        var split = std.mem.split(u8, line, " ");
         const command = split.next().?;
         if (std.mem.eql(u8, command, "v")) { // vertex (position)
             const xStr = split.next().?;
@@ -72,7 +72,7 @@ pub fn read_obj(allocator: *Allocator, unbufferedReader: anytype) !Mesh {
         } else if (std.mem.eql(u8, command, "f")) { // face
             while (true) {
                 if (split.next()) |vertex| {
-                    var faceSplit = std.mem.split(vertex, "/");
+                    var faceSplit = std.mem.split(u8, vertex, "/");
                     var posIdx = try std.fmt.parseInt(i32, faceSplit.next().?, 10);
                     const texIdxStr = faceSplit.next().?;
                     var texIdx = if (texIdxStr.len == 0) 0 else try std.fmt.parseInt(i32, texIdxStr, 10);

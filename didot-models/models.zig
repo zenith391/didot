@@ -14,7 +14,8 @@ pub const MeshAsset = struct {
         return Asset {
             .loader = meshAssetLoader,
             .loaderData = @ptrToInt(data),
-            .objectType = .Mesh
+            .objectType = .Mesh,
+            .allocator = allocator
         };
     }
 };

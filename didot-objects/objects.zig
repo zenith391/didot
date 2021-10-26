@@ -2,15 +2,16 @@ const graphics = @import("didot-graphics");
 const zalgebra = @import("zalgebra");
 const std = @import("std");
 
-pub usingnamespace @import("assets.zig");
-pub usingnamespace @import("components.zig");
+const AssetManager = @import("assets.zig").AssetManager;
+const AssetHandle = @import("assets.zig").AssetHandle;
+const Component = @import("components.zig").Component;
 
 const Mesh = graphics.Mesh;
 const Window = graphics.Window;
 const Material = graphics.Material;
 const Allocator = std.mem.Allocator;
 
-const Vec3 = zalgebra.vec3;
+const Vec3 = zalgebra.Vec3;
 
 pub const GameObjectArrayList = std.ArrayList(*GameObject);
 pub const ComponentMap = std.StringHashMap(Component);
@@ -198,7 +199,11 @@ pub const GameObject = struct {
 
     pub fn getComponent(self: *const GameObject, comptime T: type) ?*T {
         if (self.components.get(@typeName(T))) |cp| {
-            return @intToPtr(*T, cp.data);
+            if (@sizeOf(T) == 0) {
+                return undefined;
+            } else {
+                return @intToPtr(*T, cp.data);
+            }
         } else {
             return null;
         }
@@ -236,9 +241,8 @@ pub const GameObject = struct {
 
     /// Frees childrens array list (not childrens themselves!), the object associated to it and itself.
     pub fn deinit(self: *GameObject) void {
-        var iterator = self.components.iterator();
-        while (iterator.next()) |entry| {
-            var component = &entry.value;
+        var iterator = self.components.valueIterator();
+        while (iterator.next()) |component| {
             component.deinit();
         }
         self.components.deinit();
@@ -295,15 +299,15 @@ pub const Transform = struct {
     position: Vec3 = Vec3.zero(),
     /// In order: roll, pitch, yaw. Angles are in radians.
     /// Note: this will be replaced with quaternions very soon!
-    rotation: zalgebra.quat = zalgebra.quat.zero(),
+    rotation: zalgebra.Quat = zalgebra.Quat.zero(),
     scale: Vec3 = Vec3.one(),
     parent: ?*Transform = null,
 
     /// This functions returns the forward (the direction) vector of this game object using its rotation.
     pub fn getForward(self: *const Transform) Vec3 {
-        const rot = self.rotation.extract_rotation();
-        const x = zalgebra.to_radians(rot.x);
-        const y = zalgebra.to_radians(rot.y);
+        const rot = self.rotation.extractRotation();
+        const x = zalgebra.toRadians(rot.x);
+        const y = zalgebra.toRadians(rot.y);
         return Vec3.new(
             std.math.cos(x) * std.math.cos(y),
             std.math.sin(y),
@@ -313,14 +317,51 @@ pub const Transform = struct {
 
     /// This functions returns the right vector of this game object using its rotation.
     pub fn getRight(self: *const Transform) Vec3 {
-        const rot = self.rotation.extract_rotation();
-        const x = zalgebra.to_radians(rot.x);
-        const y = zalgebra.to_radians(rot.y);
+        const rot = self.rotation.extractRotation();
+        const x = zalgebra.toRadians(rot.x);
+        const y = zalgebra.toRadians(rot.y);
+        _ = y;
         return Vec3.new(
             -std.math.sin(x),
             0,
             std.math.cos(x)
         );
+    }
+
+    pub fn lookAt(self: *Transform, target: Vec3) void {
+        // const forward = Vec3.back();
+
+        // const direction = target.sub(self.position).norm();
+        // // const direction = self.position.sub(target).norm();
+        // const dot = Vec3.dot(forward, direction);
+        // const epsilon = 0.00001;
+
+        // if (std.math.approxEqAbs(f32, dot, -1.0, epsilon)) {
+        //     self.rotation = zalgebra.quat.new(std.math.pi, 0, 1, 0);
+        // } else if (std.math.approxEqAbs(f32, dot, 1.0, epsilon)) {
+        //     self.rotation = zalgebra.quat.zero();
+        // }
+
+        // const angle = zalgebra.to_degrees(std.math.acos(dot));
+        // const axis = Vec3.cross(forward, direction).norm();
+        // std.log.info("dot: {d}, {d}° around {}", .{dot, angle, axis});
+        // self.rotation = zalgebra.quat.from_axis(angle, axis).norm();
+        const up = Vec3.up();
+
+        const forward = target.sub(self.position).norm();
+        const right = up.cross(forward).norm();
+        const ip = forward.cross(right);
+        //const ip = up;
+
+        var mat = zalgebra.Mat4.identity();
+        mat.data[0][0] = right.x;   mat.data[0][1] = right.y;   mat.data[0][2] = right.z;
+        mat.data[1][0] = ip.x;      mat.data[1][1] = ip.y;      mat.data[1][2] = ip.z;
+        mat.data[2][0] = forward.x; mat.data[2][1] = forward.y; mat.data[2][2] = forward.z;
+
+        self.rotation = zalgebra.quat.from_mat4(mat);
+
+        std.log.info("rotation = {}", .{self.rotation.extract_rotation()});
+        std.log.info("{} vs {}", .{self.getForward(), forward});
     }
 };
 
@@ -355,13 +396,14 @@ pub const Scene = struct {
         const file = try std.fs.cwd().openFile(path, .{ .read = true });
         defer file.close();
 
-        const text = try reader.readAllAlloc(allocator, std.math.maxInt(usize));
+        const text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
         defer allocator.free(text);
 
         return Scene.loadFromMemory(allocator, text);
     }
 
     pub fn loadFromMemory(allocator: *Allocator, json: []const u8) !Scene {
+        _ = allocator;
         std.debug.warn("{s}\n", .{json});
     }
 
@@ -442,6 +484,7 @@ const expect = std.testing.expect;
 test "empty gameobject" {
     var alloc = std.heap.page_allocator;
     var go = GameObject.createEmpty(alloc);
+    expect(go.mesh == null);
     //expect(go.childrens.items.len == 0);
     //expect(go.objectType == null);
 }

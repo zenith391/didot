@@ -17,7 +17,6 @@ pub const Systems = struct {
 
     pub fn addSystem(comptime self: *Systems, system: anytype) void {
         const T = @TypeOf(system);
-        const info = @typeInfo(T).Fn;
         const arr = [1]System { .{ .type = T, .function = system } };
         self.items = self.items ++ arr;
     }
@@ -41,10 +40,14 @@ pub fn log(
             .debug => "debug",
         };
         const prefix2 = if (scope == .default) " -> " else " (" ++ @tagName(scope) ++ ") -> ";
-        const stderr = std.io.getStdErr().writer();
-        const held = std.debug.getStderrMutex().acquire();
-        defer held.release();
-        nosuspend stderr.print("[" ++ level_txt ++ "]" ++ prefix2 ++ format ++ "\n", args) catch return;
+        if (@import("builtin").cpu.arch == .wasm64) {
+            // TODO
+        } else {
+            const stderr = std.io.getStdErr().writer();
+            const held = std.debug.getStderrMutex().acquire();
+            defer held.release();
+            nosuspend stderr.print("[" ++ level_txt ++ "]" ++ prefix2 ++ format ++ "\n", args) catch return;
+        }
     }
 }
 
@@ -112,14 +115,14 @@ pub fn Application(comptime systems: Systems) type {
         }
 
         fn updateTick(self: *Self, comptime doSleep: bool) void {
-            var arena = std.heap.ArenaAllocator.init(self.allocator);
-            const allocator = &arena.allocator;
+            // var arena = std.heap.ArenaAllocator.init(self.allocator);
+            // const allocator = &arena.allocator;
+            // defer arena.deinit();
 
             const time_per_frame = (1 / @intToFloat(f64, self.updateTarget)) * std.time.ns_per_s;
             const time = self.timer.lap();
             const dt = @floatCast(f32, time_per_frame / @intToFloat(f64, time));
-
-            var result: anyerror!void = undefined;
+            _ = dt;
 
             inline for (systems.items) |sys| {
                 const info = @typeInfo(sys.type).Fn;
@@ -148,9 +151,13 @@ pub fn Application(comptime systems: Systems) type {
                         const tupleTypes = [1]type {type} ** forEachTypes.len;
                         const TupleType = std.meta.Tuple(&tupleTypes);
                         comptime var queryTuple: TupleType = undefined;
-                        inline for (forEachTypes) |compType, i| {
-                            @field(queryTuple, comptime std.fmt.comptimePrint("{}", .{i})) = compType;
+                        comptime {
+                            inline for (forEachTypes) |compType, i| {
+                                const name = std.fmt.comptimePrint("{}", .{i});
+                                @field(queryTuple, name) = compType;
+                            }
                         }
+
                         var query = objects.Query(queryTuple) { .scene = self.scene };
                         var it = query.iterator();
 
@@ -174,7 +181,6 @@ pub fn Application(comptime systems: Systems) type {
             }
             
             const updateLength = self.timer.read();
-            arena.deinit();
             if (doSleep) {
                 const wait = @floatToInt(u64, 
                     std.math.max(0, @floor(
@@ -194,12 +200,13 @@ pub fn Application(comptime systems: Systems) type {
         /// Start the game loop, that is doing rendering.
         /// It is also ensuring game updates and updating the window.
         pub fn loop(self: *Self) !void {
-            var thread: *std.Thread = undefined;
+            var thread: std.Thread = undefined;
             if (!single_threaded) {
                 if (std.io.is_async) {
                     _ = async self.updateLoop();
                 } else {
-                    thread = try std.Thread.spawn(self, updateLoop);
+                    thread = try std.Thread.spawn(.{}, updateLoop, .{ self });
+                    try thread.setName("Update-Thread");
                 }
             }
             while (self.window.update()) {
@@ -210,7 +217,7 @@ pub fn Application(comptime systems: Systems) type {
             }
             self.closing = true;
             if (!single_threaded and !std.io.is_async) {
-                thread.wait(); // thread must be closed before scene is de-init (to avoid use-after-free)
+                thread.join(); // thread must be closed before scene is de-init (to avoid use-after-free)
             }
             self.closing = false;
             self.deinit();

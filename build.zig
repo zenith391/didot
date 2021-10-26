@@ -19,16 +19,15 @@ pub const EngineConfig = struct {
 };
 
 pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void {
-    const allocator = step.builder.allocator;
     const prefix = config.prefix;
 
     const zlm = Pkg {
         .name = "zalgebra",
-        .path = prefix ++ "zalgebra/src/main.zig"
+        .path = std.build.FileSource.relative(prefix ++ "zalgebra/src/main.zig")
     };
     const image = Pkg {
         .name = "didot-image",
-        .path = prefix ++ "didot-image/image.zig"
+        .path = std.build.FileSource.relative(prefix ++ "didot-image/image.zig")
     };
 
     const windowModule = comptime blk: {
@@ -43,85 +42,57 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
         // }
     };
 
-    const window = (try @import(prefix ++ windowModule ++ "/build.zig").build(step, config)) orelse Pkg {
+    if (!comptime std.mem.eql(u8, windowModule, "didot-glfw")) {
+        @compileError("windowing module must be didot-glfw");
+    } else if (!comptime std.mem.eql(u8, config.graphicsModule, "didot-opengl")) {
+        @compileError("graphics module must be OpenGL");
+    } else if (!comptime std.mem.eql(u8, config.physicsModule, "didot-ode")) {
+        @compileError("graphics module must be ODE");
+    }
+
+    //const windowPath = windowModule ++ "/build.zig";
+    const window = (try @import("didot-glfw/build.zig").build(step, config)) orelse Pkg {
         .name = "didot-window",
-        .path = prefix ++ windowModule ++ "/window.zig",
+        .path = std.build.FileSource.relative(prefix ++ windowModule ++ "/window.zig"),
         .dependencies = &[_]Pkg{zlm}
     };
 
     const graphics = Pkg {
         .name = "didot-graphics",
-        .path = prefix ++ config.graphicsModule ++ "/graphics.zig",
+        .path = std.build.FileSource.relative(prefix ++ config.graphicsModule ++ "/main.zig"),
         .dependencies = &[_]Pkg{window,image,zlm}
     };
-    try @import(prefix ++ config.graphicsModule ++ "/build.zig").build(step);
+    try @import("didot-opengl/build.zig").build(step);
     
     const models = Pkg {
         .name = "didot-models",
-        .path = prefix ++ "didot-models/models.zig",
+        .path = std.build.FileSource.relative(prefix ++ "didot-models/models.zig"),
         .dependencies = &[_]Pkg{zlm,graphics}
     };
 
-    const b = step.builder;
-    const assetDep = Pkg {
-        .name = "didot-assets-embed",
-        .path = try std.mem.concat(allocator, u8, &[_][]const u8 {b.build_root, "/", b.cache_root, "/assets/", step.name, ".zig"})
-    };
-    var objDep: [5]Pkg = .{zlm,graphics,models,image,undefined};
     if (config.embedAssets) {
-        objDep[4] = assetDep;
-        var dir = try std.fs.openDirAbsolute(b.build_root, .{});
-        defer dir.close();
-
-        var cacheDir = try dir.openDir(b.cache_root, .{});
-        var assetCacheDir = try cacheDir.makeOpenPath("assets", .{});
-        defer assetCacheDir.close();
-        cacheDir.close();
-
-        const fullName = try std.mem.concat(allocator, u8, &[_][]const u8 {step.name, ".zig"});
-        const cacheFile = try assetCacheDir.createFile(fullName, .{ .truncate = true });
-        defer cacheFile.close();
-        allocator.free(fullName);
-        const writer = cacheFile.writer();
-
-        const dirPath = try dir.realpathAlloc(allocator, "assets");
-        defer allocator.free(dirPath);
-
-        var walker = try std.fs.walkPath(allocator, dirPath);
-        defer walker.deinit();
-        while (try walker.next()) |entry| {
-            if (entry.kind == .File) {
-                const rel = entry.path[dirPath.len+1..];
-                const file = try entry.dir.openFile(entry.basename, .{});
-                defer file.close();
-                const text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-                try writer.print("pub const @\"{s}\" = @embedFile(\"{s}\");\n", .{rel, entry.path}); // TODO: maybe use comptime to compress
-                allocator.free(text);
-            }
-        }
+        try createBundle(step);
     }
 
     const objects = Pkg {
         .name = "didot-objects",
-        .path = prefix ++ "didot-objects/objects.zig",
-        .dependencies = if (config.embedAssets) &objDep else objDep[0..4]
+        .path = std.build.FileSource.relative(prefix ++ "didot-objects/main.zig"),
+        .dependencies = &[_]Pkg{zlm,graphics,models,image}
     };
 
     const physics = Pkg {
         .name = "didot-physics",
-        .path = prefix ++ config.physicsModule ++ "/physics.zig",
+        .path = std.build.FileSource.relative(prefix ++ config.physicsModule ++ "/physics.zig"),
         .dependencies = &[_]Pkg{objects, zlm}
     };
     if (config.usePhysics) {
-        try @import(prefix ++ config.physicsModule ++ "/build.zig").build(step);
+        try @import("didot-ode/build.zig").build(step);
         step.addPackage(physics);
     }
 
-
-
     const app = Pkg {
         .name = "didot-app",
-        .path = prefix ++ "didot-app/app.zig",
+        .path = std.build.FileSource.relative(prefix ++ "didot-app/app.zig"),
         .dependencies = &[_]Pkg{objects,graphics}
     };
 
@@ -134,19 +105,18 @@ pub fn addEngineToExe(step: *LibExeObjStep, comptime config: EngineConfig) !void
     step.addPackage(app);
 }
 
-fn embedAssets(step: *LibExeObjStep) !void {
+fn createBundle(step: *LibExeObjStep) !void {
     const b = step.builder;
     const allocator = b.allocator;
     var dir = try std.fs.openDirAbsolute(b.build_root, .{});
     defer dir.close();
 
     var cacheDir = try dir.openDir(b.cache_root, .{});
-    var assetCacheDir = try cacheDir.makeOpenPath("assets", .{});
-    defer assetCacheDir.close();
-    cacheDir.close();
+    defer cacheDir.close();
+    (try cacheDir.makeOpenPath("assets", .{})).close(); // mkdir "assets"
 
-    const fullName = try std.mem.concat(allocator, u8, &[_][]const u8 {step.name, ".zig"});
-    const cacheFile = try assetCacheDir.createFile(fullName, .{ .truncate = true });
+    const fullName = try std.mem.concat(allocator, u8, &[_][]const u8 {"assets/", step.name, ".bundle"});
+    const cacheFile = try cacheDir.createFile(fullName, .{ .truncate = true });
     defer cacheFile.close();
     allocator.free(fullName);
     const writer = cacheFile.writer();
@@ -154,29 +124,46 @@ fn embedAssets(step: *LibExeObjStep) !void {
     const dirPath = try dir.realpathAlloc(allocator, "assets");
     defer allocator.free(dirPath);
 
-    var walker = try std.fs.walkPath(allocator, dirPath);
-    defer walker.deinit();
-    while (try walker.next()) |entry| {
-        if (entry.kind == .File) {
-            const rel = entry.path[dirPath.len+1..];
-            const file = try entry.dir.openFile(entry.basename, .{});
-            defer file.close();
-            const text = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
-            try writer.print("pub const @\"{s}\" = @embedFile(\"{s}\");\n", .{rel, entry.path});
-            allocator.free(text);
+    var walkedDir = try std.fs.openDirAbsolute(dirPath, .{ .iterate = true });
+    defer walkedDir.close();
+
+    var count: u64 = 0;
+
+    // Count the number of items
+    {
+        var walker = try walkedDir.walk(allocator);
+        defer walker.deinit();
+        while ((try walker.next()) != null) {
+            count += 1;
         }
     }
 
-    step.addPackage(Pkg {
-        .name = "didot-assets-embed",
-        .path = try std.mem.concat(allocator, u8, &[_][]const u8 {b.build_root, "/", b.cache_root, "/assets/", step.name, ".zig"})
-    });
+    var walker = try walkedDir.walk(allocator);
+    defer walker.deinit();
+
+    try writer.writeByte(0); // no compression
+    try writer.writeIntLittle(u64, count);
+    while (try walker.next()) |entry| {
+        if (entry.kind == .File) {
+            const path = entry.path[dirPath.len+1..];
+            const file = try std.fs.openFileAbsolute(entry.path, .{});
+            defer file.close();
+            const data = try file.readToEndAlloc(allocator, std.math.maxInt(usize));
+            defer allocator.free(data);
+
+            try writer.writeIntLittle(u32, @intCast(u32, path.len));
+            try writer.writeIntLittle(u32, @intCast(u32, data.len));
+            try writer.writeAll(path);
+            try writer.writeAll(data);
+        }
+    }
 }
 
 pub fn build(b: *Builder) !void {
-    const target = b.standardTargetOptions(.{});
+    var target = b.standardTargetOptions(.{});
     var mode = b.standardReleaseOptions();
     const stripExample = b.option(bool, "strip-example", "Attempt to minify examples by stripping them and changing release mode.") orelse false;
+    const wasm = b.option(bool, "wasm-target", "Compile the code to run on WASM backend.") orelse false;
 
     if (@hasField(LibExeObjStep, "emit_docs")) {
         const otest = b.addTest("didot.zig");
@@ -203,10 +190,17 @@ pub fn build(b: *Builder) !void {
 
     const engineConfig = EngineConfig {
         .windowModule = "didot-glfw",
+        .graphicsModule = "didot-opengl",
         .autoWindow = false,
         .usePhysics = true,
         .embedAssets = true
     };
+
+    if (wasm) {
+        target = try std.zig.CrossTarget.parse(.{
+            .arch_os_abi = "wasm64-freestanding-gnu"
+        });
+    }
 
     inline for (examples) |example| {
         const name = example[0];
@@ -214,9 +208,8 @@ pub fn build(b: *Builder) !void {
 
         const exe = b.addExecutable(name, path);
         exe.setTarget(target);
-        exe.setBuildMode(if (stripExample) @import("builtin").Mode.ReleaseSmall else mode);
+        exe.setBuildMode(if (stripExample) std.builtin.Mode.ReleaseSmall else mode);
         try addEngineToExe(exe, engineConfig);
-        try embedAssets(exe);
         exe.single_threaded = stripExample;
         exe.strip = stripExample;
         exe.install();

@@ -1,12 +1,8 @@
-const c = @import("c.zig");
+const js = @import("js.zig");
 const std = @import("std");
 const zalgebra = @import("zalgebra");
 const Thread = std.Thread;
 const Allocator = std.mem.Allocator;
-
-const Window = @import("didot-window").Window;
-// TODO: get rid of that
-const windowContextLock = @import("didot-window").windowContextLock;
 
 pub const ShaderError = error{ ShaderCompileError, InvalidContextError };
 
@@ -24,47 +20,13 @@ pub const Mesh = struct {
     vertices: usize,
 
     pub fn create(vertices: []f32, elements: ?[]c.GLuint) Mesh {
-        var vbo: c.GLuint = 0;
-        c.glGenBuffers(1, &vbo);
-        c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
-        c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(c_long, vertices.len * @sizeOf(f32)), vertices.ptr, c.GL_STATIC_DRAW);
-
-        const stride = 8 * @sizeOf(f32);
-
-        var vao: c.GLuint = 0;
-        c.glGenVertexArrays(1, &vao);
-        c.glBindVertexArray(vao);
-        c.glVertexAttribPointer(0, 3, c.GL_FLOAT, c.GL_FALSE, stride, 0);
-        c.glVertexAttribPointer(1, 3, c.GL_FLOAT, c.GL_FALSE, stride, 3 * @sizeOf(f32));
-        c.glVertexAttribPointer(2, 2, c.GL_FLOAT, c.GL_FALSE, stride, 6 * @sizeOf(f32));
-        c.glEnableVertexAttribArray(0);
-        c.glEnableVertexAttribArray(1);
-        c.glEnableVertexAttribArray(2);
-
-        var ebo: c.GLuint = 0;
-        var elementsSize: ?usize = null;
-        if (elements) |elem| {
-            c.glGenBuffers(1, &ebo);
-            c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, ebo);
-            c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(c_long, elem.len * @sizeOf(c.GLuint)), elem.ptr, c.GL_STATIC_DRAW);
-            elementsSize = elem.len;
-        }
-
-        std.log.scoped(.didot).debug("Created mesh (VAO = {}, VBO = {})", .{vao, vbo});
-
-        return Mesh{
-            .vao = vao,
-            .vbo = vbo,
-            .ebo = if (elements == null) null else ebo,
-            .elements = elementsSize orelse 0,
-            .vertices = vertices.len,
-        };
+        return undefined;
     }
 };
 
 /// Color defined to be a 3 component vector
 /// X value is red, Y value is blue and Z value is green.
-pub const Color = zalgebra.Vec3;
+pub const Color = zalgebra.vec3;
 
 pub const Material = struct {
     texture: ?AssetHandle = null,
@@ -87,83 +49,22 @@ pub const ShaderProgram = struct {
     uniformHashes: std.StringHashMap(u32),
 
     pub fn createFromFile(allocator: *Allocator, vertPath: []const u8, fragPath: []const u8) !ShaderProgram {
-        const vertFile = try std.fs.cwd().openFile(vertPath, .{ .read = true });
-        const vert = try vertFile.reader().readAllAlloc(allocator, std.math.maxInt(u64));
-        const nullVert = try allocator.dupeZ(u8, vert); // null-terminated string
-        allocator.free(vert);
-        defer allocator.free(nullVert);
-        vertFile.close();
-
-        const fragFile = try std.fs.cwd().openFile(fragPath, .{ .read = true });
-        const frag = try fragFile.reader().readAllAlloc(allocator, std.math.maxInt(u64));
-        const nullFrag = try allocator.dupeZ(u8, frag);
-        allocator.free(frag);
-        defer allocator.free(nullFrag);
-        fragFile.close();
-
-        return try ShaderProgram.create(allocator, nullVert, nullFrag);
+        return undefined;
     }
 
     pub fn create(allocator: *Allocator, vert: [:0]const u8, frag: [:0]const u8) !ShaderProgram {
-        const held = windowContextLock();
-        defer held.release();
-
-        const vertexShader = c.glCreateShader(c.GL_VERTEX_SHADER);
-        var v = try std.fmt.allocPrintZ(allocator, "{s}", .{vert});
-        c.glShaderSource(vertexShader, 1, &v, null);
-        c.glCompileShader(vertexShader);
-        allocator.free(v);
-        try checkError(vertexShader);
-
-        const fragmentShader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
-        var f = try std.fmt.allocPrintZ(allocator, "#version 330 core\n#define MAX_POINT_LIGHTS 4\n{s}", .{frag});
-        c.glShaderSource(fragmentShader, 1, &f, null);
-        c.glCompileShader(fragmentShader);
-        allocator.free(f);
-        try checkError(fragmentShader);
-
-        const shaderProgramId = c.glCreateProgram();
-        c.glAttachShader(shaderProgramId, vertexShader);
-        c.glAttachShader(shaderProgramId, fragmentShader);
-        c.glBindFragDataLocation(shaderProgramId, 0, "outColor");
-        c.glLinkProgram(shaderProgramId);
-        c.glUseProgram(shaderProgramId);
-
-        var vao: c.GLuint = 0;
-        c.glGenVertexArrays(1, &vao);
-        c.glBindVertexArray(vao);
-
-        const stride = 5 * @sizeOf(f32);
-        const posAttrib = c.glGetAttribLocation(shaderProgramId, "position");
-        c.glVertexAttribPointer(@bitCast(c.GLuint, posAttrib), 3, c.GL_FLOAT, c.GL_FALSE, stride, 0);
-        c.glEnableVertexAttribArray(@bitCast(c.GLuint, posAttrib));
-
-        const texAttrib = c.glGetAttribLocation(shaderProgramId, "texcoord");
-        c.glVertexAttribPointer(@bitCast(c.GLuint, texAttrib), 2, c.GL_FLOAT, c.GL_FALSE, stride, 3 * @sizeOf(f32));
-        c.glEnableVertexAttribArray(@bitCast(c.GLuint, texAttrib));
-
-        std.log.scoped(.didot).debug("Created shader", .{});
-
-        return ShaderProgram{
-            .id = shaderProgramId,
-            .vao = vao,
-            .vertex = vertexShader,
-            .fragment = fragmentShader,
-            .uniformLocations = std.StringHashMap(c.GLint).init(std.heap.page_allocator),
-            .uniformHashes = std.StringHashMap(u32).init(std.heap.page_allocator),
-            .allocator = allocator,
-        };
+        return undefined;
     }
 
     pub fn bind(self: *const ShaderProgram) void {
-        c.glUseProgram(self.id);
+
     }
 
     fn getUniformLocation(self: *ShaderProgram, name: [:0]const u8) c.GLint {
         if (self.uniformLocations.get(name)) |location| {
             return location;
         } else {
-            const location = c.glGetUniformLocation(self.id, name);
+            const location = -1;
             if (location == -1) {
                 std.log.scoped(.didot).warn("Shader uniform not found: {s}", .{name});
             } else {
@@ -187,10 +88,10 @@ pub const ShaderProgram = struct {
     }
 
     /// Set an OpenGL uniform to the following 4x4 matrix.
-    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, val: zalgebra.Mat4) void {
+    pub fn setUniformMat4(self: *ShaderProgram, name: [:0]const u8, val: zalgebra.mat4) void {
         if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
         var uniform = self.getUniformLocation(name);
-        c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, val.getData());
+        //c.glUniformMatrix4fv(uniform, 1, c.GL_FALSE, val.get_data());
     }
 
     /// Set an OpenGL uniform to the following boolean.
@@ -198,21 +99,21 @@ pub const ShaderProgram = struct {
         if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
         var uniform = self.getUniformLocation(name);
         var v: c.GLint = if (val) 1 else 0;
-        c.glUniform1i(uniform, v);
+        //c.glUniform1i(uniform, v);
     }
 
     /// Set an OpenGL uniform to the following float.
     pub fn setUniformFloat(self: *ShaderProgram, name: [:0]const u8, val: f32) void {
         if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
         var uniform = self.getUniformLocation(name);
-        c.glUniform1f(uniform, val);
+        //c.glUniform1f(uniform, val);
     }
 
     /// Set an OpenGL uniform to the following 3D float vector.
-    pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, val: zalgebra.Vec3) void {
+    pub fn setUniformVec3(self: *ShaderProgram, name: [:0]const u8, val: zalgebra.vec3) void {
         if (self.isUniformSame(name, &std.mem.toBytes(val))) return;
         var uniform = self.getUniformLocation(name);
-        c.glUniform3f(uniform, val.x, val.y, val.z);
+        //c.glUniform3f(uniform, val.x, val.y, val.z);
     }
 
     fn checkError(shader: c.GLuint) ShaderError!void {
@@ -221,11 +122,11 @@ pub const ShaderProgram = struct {
         if (err != c.GL_NO_ERROR) {
             std.log.scoped(.didot).err("GL error while initializing shaders: {}", .{err});
         }
-        c.glGetShaderiv(shader, c.GL_COMPILE_STATUS, &status);
+        //c.glGetShaderiv(shader, c.GL_COMPILE_STATUS, &status);
         if (status != c.GL_TRUE) {
             var buf: [2048]u8 = undefined;
             var totalLen: c.GLsizei = -1;
-            c.glGetShaderInfoLog(shader, 2048, &totalLen, buf[0..]);
+            //c.glGetShaderInfoLog(shader, 2048, &totalLen, buf[0..]);
             if (totalLen == -1) {
                 // the length of the infolog seems to not be set
                 // when a GL context isn't set (so when the window isn't created)
@@ -254,36 +155,24 @@ pub const Texture = struct {
     id: c.GLuint,
     width: usize = 0,
     height: usize = 0,
-    tiling: zalgebra.Vec2 = zalgebra.Vec2.new(1, 1),
+    tiling: zalgebra.vec2 = zalgebra.vec2.new(1, 1),
 
     pub fn createEmptyCubemap() Texture {
         var id: c.GLuint = undefined;
-        c.glGenTextures(1, &id);
-        c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, id);
-        c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
-        c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
-        c.glTexParameteri(c.GL_TEXTURE_CUBE_MAP, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
         return Texture { .id = id };
     }
 
     pub fn createEmpty2D() Texture {
         var id: c.GLuint = undefined;
-        c.glGenTextures(1, &id);
-        c.glBindTexture(c.GL_TEXTURE_2D, id);
-        c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, 1);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
-        c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
         return Texture { .id = id };
     }
 
     pub fn bind(self: *const Texture) void {
-        c.glBindTexture(c.GL_TEXTURE_2D, self.id);
+
     }
 
     pub fn deinit(self: *const Texture) void {
-        c.glDeleteTextures(1, &self.id);
+
     }
 };
 
@@ -291,7 +180,7 @@ pub const Texture = struct {
 pub const TextureAsset = struct {
     pub fn init2D(allocator: *Allocator, format: []const u8) !Asset {
         var data = try allocator.create(TextureAssetLoaderData);
-        data.tiling = zalgebra.Vec2.new(0, 0);
+        data.tiling = zalgebra.vec2.new(0, 0);
         data.cubemap = null;
         data.format = format;
         return Asset {
@@ -329,7 +218,7 @@ pub const TextureAsset = struct {
 pub const TextureAssetLoaderData = struct {
     cubemap: ?CubemapSettings = null,
     format: []const u8,
-    tiling: zalgebra.Vec2 = zalgebra.Vec2.new(1, 1)
+    tiling: zalgebra.vec2 = zalgebra.vec2.new(1, 1)
 };
 
 pub const TextureAssetLoaderError = error{InvalidFormat};
@@ -380,16 +269,12 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize, stream: *AssetS
         }
 
         i = 0;
-        inline for (@typeInfo(CubemapSettings).Struct.fields) |_| {
+        inline for (@typeInfo(CubemapSettings).Struct.fields) |field| {
             const ptr = try await frames[i];
             const tex = @intToPtr(*Texture, ptr);
             var tmp = try allocator.alloc(u8, tex.width * tex.height * 3);
             const held = windowContextLock();
             tex.bind();
-            c.glGetTexImage(c.GL_TEXTURE_2D, 0, c.GL_RGB, c.GL_UNSIGNED_BYTE, tmp.ptr);
-            c.glTexImage2D(targets[i], 0, c.GL_SRGB,
-                @intCast(c_int, tex.width), @intCast(c_int, tex.height),
-                0, c.GL_RGB, c.GL_UNSIGNED_BYTE, tmp.ptr);
             allocator.free(tmp);
             held.release();
             std.log.scoped(.didot).debug("Loaded cubemap {s}", .{names[i]});
@@ -403,8 +288,6 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize, stream: *AssetS
         const held = windowContextLock();
         var texture = Texture.createEmpty2D();
         defer held.release();
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_SRGB, @intCast(c_int, img.width), @intCast(c_int, img.height),
-            0, getTextureFormat(img.format), c.GL_UNSIGNED_BYTE, &img.data[0]);
         texture.tiling = data.tiling;
         texture.width = img.width;
         texture.height = img.height;
@@ -416,7 +299,7 @@ pub fn textureAssetLoader(allocator: *Allocator, dataPtr: usize, stream: *AssetS
     }
 }
 
-const objects = @import("../didot-objects/main.zig"); // hacky hack til i found a way for graphics to depend on objects
+const objects = @import("../didot-objects/objects.zig"); // hacky hack til i found a way for graphics to depend on objects
 const Scene = objects.Scene;
 const GameObject = objects.GameObject;
 const Camera = objects.Camera;
@@ -428,22 +311,20 @@ const AssetHandle = objects.AssetHandle;
 /// Set this function to replace normal pre-render behaviour (GL state, clear, etc.), it happens after viewport
 pub var preRender: ?fn() void = null;
 /// Set this function to replace normal viewport behaviour
-pub var viewport: ?fn() zalgebra.Vec4 = null;
+pub var viewport: ?fn() zalgebra.vec4 = null;
 
 pub fn renderScene(scene: *Scene, window: Window) !void {
     const size = window.getFramebufferSize();
-    try renderSceneOffscreen(scene, if (viewport) |func| func() else zalgebra.Vec4.new(0, 0, size.x, size.y));
+    try renderSceneOffscreen(scene, if (viewport) |func| func() else zalgebra.vec4.new(0, 0, size.x, size.y));
 }
 
 var renderHeld: @typeInfo(@TypeOf(std.Thread.Mutex.acquire)).Fn.return_type.? = undefined;
 
 /// Internal method for rendering a game scene.
 /// This method is here as it uses graphics API-dependent code (it's the rendering part afterall)
-pub fn renderSceneOffscreen(scene: *Scene, vp: zalgebra.Vec4) !void {
+pub fn renderSceneOffscreen(scene: *Scene, vp: zalgebra.vec4) !void {
     renderHeld = windowContextLock();
     defer renderHeld.release();
-    c.glViewport(@floatToInt(c_int, @floor(vp.x)), @floatToInt(c_int, @floor(vp.y)),
-        @floatToInt(c_int, @floor(vp.z)), @floatToInt(c_int, @floor(vp.w)));
     if (preRender) |func| {
         func();
     } else {
@@ -457,33 +338,33 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zalgebra.Vec4) !void {
     if (scene.camera) |cameraObject| {
         const camera = cameraObject.getComponent(Camera).?;
         const projMatrix = switch (camera.projection) {
-            .Perspective => |p| zalgebra.Mat4.perspective(p.fov, vp.z / vp.w, p.near, p.far),
-            .Orthographic => |p| zalgebra.Mat4.orthographic(p.left, p.right, p.bottom, p.top, p.near, p.far)
+            .Perspective => |p| zalgebra.mat4.perspective(p.fov, vp.z / vp.w, p.near, p.far),
+            .Orthographic => |p| zalgebra.mat4.orthographic(p.left, p.right, p.bottom, p.top, p.near, p.far)
         };
 
         // create the direction vector to be used with the view matrix.
         const transform = cameraObject.getComponent(objects.Transform).?;
-        const euler = transform.rotation.extractRotation();
-        const yaw = zalgebra.toRadians(euler.x);
-        const pitch = zalgebra.toRadians(euler.y);
-        const direction = zalgebra.Vec3.new(
+        const euler = transform.rotation.extract_rotation();
+        const yaw = zalgebra.to_radians(euler.x);
+        const pitch = zalgebra.to_radians(euler.y);
+        const direction = zalgebra.vec3.new(
             std.math.cos(yaw) * std.math.cos(pitch),
             std.math.sin(pitch),
             std.math.sin(yaw) * std.math.cos(pitch)
         ).norm();
-        const viewMatrix = zalgebra.Mat4.lookAt(transform.position, transform.position.add(direction), zalgebra.Vec3.new(0.0, 1.0, 0.0));
-        //const viewMatrix = zalgebra.Mat4.from_translate(transform.position.scale(-1))
+        const viewMatrix = zalgebra.mat4.look_at(transform.position, transform.position.add(direction), zalgebra.vec3.new(0.0, 1.0, 0.0));
+        //const viewMatrix = zalgebra.mat4.from_translate(transform.position.scale(-1))
         //   .mult(transform.rotation.to_mat4());
 
-        //const viewMatrix = zalgebra.Mat4.from_translate(transform.position).mult(zalgebra.Mat4.identity());
+        //const viewMatrix = zalgebra.mat4.from_translate(transform.position).mult(zalgebra.mat4.identity());
 
         if (camera.skybox) |*skybox| {
             skybox.shader.bind();
-            const view = zalgebra.Mat4.identity()
-                .mult(zalgebra.Mat4.fromEulerAngle(viewMatrix.extractRotation()));
+            const view = zalgebra.mat4.identity()
+                .mult(zalgebra.mat4.from_euler_angle(viewMatrix.extract_rotation()));
             skybox.shader.setUniformMat4("view", view);
             skybox.shader.setUniformMat4("projection", projMatrix);
-            try renderSkybox(skybox, assets);
+            try renderSkybox(skybox, assets, camera);
         }
 
         camera.shader.bind();
@@ -504,41 +385,28 @@ pub fn renderSceneOffscreen(scene: *Scene, vp: zalgebra.Vec4) !void {
 
         const held = scene.treeLock.acquire();
         for (scene.objects.items) |gameObject| {
-            try renderObject(gameObject, assets, camera, zalgebra.Mat4.identity());
+            try renderObject(gameObject, assets, camera, zalgebra.mat4.identity());
         }
         held.release();
     }
 }
 
-fn renderSkybox(skybox: *objects.Skybox, assets: *AssetManager) !void {
+fn renderSkybox(skybox: *objects.Skybox, assets: *AssetManager, camera: *Camera) !void {
     var mesh = try skybox.mesh.get(Mesh, assets.allocator);
-    c.glDepthMask(c.GL_FALSE);
-    c.glBindVertexArray(mesh.vao);
 
     renderHeld.release();
     const texture = try skybox.cubemap.get(Texture, assets.allocator);
     renderHeld = windowContextLock();
-    c.glBindTexture(c.GL_TEXTURE_CUBE_MAP, texture.id);
-
-    if (mesh.ebo != null) {
-        c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
-    } else {
-        c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
-    }
-    c.glDepthMask(c.GL_TRUE);
 }
 
 // TODO: remake parent matrix with the new system
-fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera, parentMatrix: zalgebra.Mat4) anyerror!void {
+fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera, parentMatrix: zalgebra.mat4) anyerror!void {
     if (gameObject.getComponent(objects.Transform)) |transform| {
-        const matrix = zalgebra.Mat4.recompose(transform.position, transform.rotation, transform.scale);
-        _ = parentMatrix; // TODO: take it in account
-
+        const matrix = zalgebra.mat4.recompose(transform.position, transform.rotation, transform.scale);
         if (gameObject.mesh) |handle| {
             renderHeld.release();
             const mesh = try handle.get(Mesh, assets.allocator);
             renderHeld = windowContextLock();
-            c.glBindVertexArray(mesh.vao);
             const material = gameObject.material;
 
             if (material.texture) |asset| {
@@ -558,15 +426,11 @@ fn renderObject(gameObject: *GameObject, assets: *AssetManager, camera: *Camera,
             var s: f32 = std.math.clamp(material.shininess, 1.0, 128.0);
             camera.shader.setUniformFloat("material.shininess", s);
             camera.shader.setUniformMat4("modelMatrix", matrix);
-
-            if (mesh.ebo != null) {
-                c.glDrawElements(c.GL_TRIANGLES, @intCast(c_int, mesh.elements), c.GL_UNSIGNED_INT, null);
-            } else {
-                c.glDrawArrays(c.GL_TRIANGLES, 0, @intCast(c_int, mesh.vertices));
-            }
         }
     }
 }
+
+pub usingnamespace @import("didot-window");
 
 comptime {
     std.testing.refAllDecls(@This());

@@ -71,18 +71,18 @@ const IHDR = struct {
     interlaceMethod: u8
 };
 
-fn filterNone(image: []const u8, line: []u8, y: u32, start: usize, bytes: u8) callconv(.Inline) void {
+fn filterNone(_: []const u8, _: []u8, _: u32, _: usize, _: u8) callconv(.Inline) void {
     // line is already pre-filled with original data, so nothing to do
 }
 
-fn filterSub(image: []const u8, line: []u8, y: u32, start: usize, bytes: u8) callconv(.Inline) void {
+fn filterSub(_: []const u8, line: []u8, _: u32, _: usize, bytes: u8) callconv(.Inline) void {
     var pos: usize = bytes;
     while (pos < line.len) : (pos += 1) {
         line[pos] = line[pos] +% line[pos-bytes];
     }
 }
 
-fn filterUp(image: []const u8, line: []u8, y: u32, start: usize, bytes: u8) callconv(.Inline) void {
+fn filterUp(image: []const u8, line: []u8, y: u32, start: usize, _: u8) callconv(.Inline) void {
     const width = line.len;
     if (y != 0) {
         var pos: usize = 0;
@@ -217,7 +217,6 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
         const bytesPerLine = ihdr.width * bpp;
 
         while (y < ihdr.height) {
-            var x: u32 = 0;
             // in PNG files, each scanlines have a filter, it is used to have more efficient compression.
             const filterType = try idatReader.readByte();
             const offset = y*bytesPerLine;
@@ -249,7 +248,6 @@ pub fn read(allocator: *Allocator, unbufferedReader: anytype) !Image {
         var line = try allocator.alloc(u8, bytesPerLine);
         defer allocator.free(line);
         while (y < ihdr.height) {
-            var x: u32 = 0;
             const filterType = try idatReader.readByte();
             const offset = y*bytesPerLine;
             _ = try idatReader.readAll(line);

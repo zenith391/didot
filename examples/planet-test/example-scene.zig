@@ -9,13 +9,25 @@ const Quat = zalgebra.quat;
 const rad = zalgebra.to_radians;
 const Allocator = std.mem.Allocator;
 
+var scene: *Scene = undefined;
+
 const App = comptime blk: {
     comptime var systems = Systems {};
+    systems.addSystem(cameraSystem);
     break :blk Application(systems);
 };
 
+const CameraController = struct {};
+
+pub fn cameraSystem(controller: *Camera, transform: *Transform) !void {
+    if (scene.findChild("Planet")) |planet| {
+        const planetPosition = planet.getComponent(Transform).?.position;
+        transform.lookAt(planetPosition);
+    }
+}
+
 pub fn init(allocator: *Allocator, app: *App) !void {
-    const scene = app.scene;
+    scene = app.scene;
     const asset = &scene.assetManager;
 
     try asset.autoLoad(allocator);
@@ -23,15 +35,15 @@ pub fn init(allocator: *Allocator, app: *App) !void {
     var shader = try ShaderProgram.createFromFile(allocator, "assets/shaders/vert.glsl", "assets/shaders/frag.glsl");
 
     var camera = try GameObject.createObject(allocator, null);
-    camera.getComponent(Transform).?.* = .{
-        .position = Vec3.new(1.5, 1.5, -0.5),
-        .rotation = Quat.from_euler_angle(Vec3.new(-120, -15, 0))
-    };
+    camera.getComponent(Transform).?.position = Vec3.new(1.5, 1.5, -0.5);
+    camera.getComponent(Transform).?.rotation = Quat.from_euler_angle(Vec3.new(300, -15, 0));
     try camera.addComponent(Camera { .shader = shader });
+    try camera.addComponent(CameraController {});
     try app.scene.add(camera);
 
     var sphere = try GameObject.createObject(allocator, asset.get("sphere.obj"));
-    sphere.getComponent(Transform).?.position = Vec3.new(-0.8, 0.75, -5);
+    sphere.name = "Planet";
+    sphere.getComponent(Transform).?.position = Vec3.new(5, 0.75, -5);
     try app.scene.add(sphere);
 
     var light = try GameObject.createObject(allocator, null);

@@ -8,7 +8,7 @@ pub const WindowError = error {
 
 const std = @import("std");
 const zalgebra = @import("zalgebra");
-const Vec2 = zalgebra.vec2;
+const Vec2 = zalgebra.Vec2;
 
 var mainWindow: ?*Window = null;
 
@@ -129,6 +129,7 @@ pub const Input = struct {
     }
 
     pub fn getJoystick(self: *const Input, id: u4) ?Joystick {
+        _ = self;
         if (c.glfwJoystickPresent(@intCast(c_int, id)) == c.GLFW_FALSE) {
             return null;
         } else {
@@ -289,6 +290,7 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Window) void {
+        _ = self;
         c.glfwTerminate();
     }
 

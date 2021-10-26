@@ -14,7 +14,8 @@ pub fn read(allocator: *Allocator, reader: anytype, seekable: anytype) !Image {
         return BmpError.UnsupportedFormat;
     }
 
-    const size = reader.readIntLittle(u32);
+    const size = try reader.readIntLittle(u32);
+    _ = size;
     _ = try reader.readBytesNoEof(4); // skip the reserved bytes
     const offset = try reader.readIntLittle(u32);
     const dibSize = try reader.readIntLittle(u32);
@@ -24,6 +25,7 @@ pub fn read(allocator: *Allocator, reader: anytype, seekable: anytype) !Image {
         const height = @intCast(usize, try reader.readIntLittle(i32));
         const colorPlanes = try reader.readIntLittle(u16);
         const bpp = try reader.readIntLittle(u16);
+        _ = colorPlanes;
 
         const compression = try reader.readIntLittle(u32);
         const imageSize = try reader.readIntLittle(u32);
@@ -31,6 +33,7 @@ pub fn read(allocator: *Allocator, reader: anytype, seekable: anytype) !Image {
         const vertRes = try reader.readIntLittle(i32);
         const colorsNum = try reader.readIntLittle(u32);
         const importantColors = try reader.readIntLittle(u32);
+        _ = compression; _ = imageSize; _ = horzRes; _ = vertRes; _ = colorsNum; _ = importantColors;
 
         try seekable.seekTo(offset);
         const imgReader = (std.io.BufferedReader(16*1024, @TypeOf(reader)) { 

@@ -11,7 +11,7 @@ const Component = objects.Component;
 const GameObject = objects.GameObject;
 const Transform = objects.Transform;
 
-const Vec3 = zalgebra.vec3;
+const Vec3 = zalgebra.Vec3;
 
 var isOdeInit: bool = false;
 const logger = std.log.scoped(.didot);
@@ -64,8 +64,11 @@ pub const World = struct {
         const bounce: f32 = std.math.max(b1data.material.bounciness, b2data.material.bounciness);
 
         var contact: c.dContact = undefined;
-        contact.surface.mode = c.dContactBounce;
-        contact.surface.mu = std.math.inf(c.dReal);
+        contact.surface.mode = c.dContactBounce | c.dContactMu2;
+        contact.surface.mu = b1data.material.friction;
+        contact.surface.mu2 = b2data.material.friction;
+        contact.surface.rho = b1data.material.friction/10;
+        contact.surface.rho2 = b2data.material.friction/10;
         contact.surface.bounce = bounce;
         contact.surface.bounce_vel = 1;
         contact.surface.soft_cfm = 0.1;
@@ -109,11 +112,12 @@ pub const KinematicState = enum {
 };
 
 pub const PhysicsMaterial = struct {
-    bounciness: f32 = 0.0
+    bounciness: f32 = 0.0,
+    friction: f32 = 10.0
 };
 
 pub const SphereCollider = struct {
-    radius: f32
+    radius: f32 = 0.5
 };
 
 pub const BoxCollider = struct {
@@ -154,22 +158,6 @@ pub const Rigidbody = struct {
     }
 };
 
-fn quatToEuler(q: [*]const c.dReal) Vec3 {
-    var angles = Vec3.new(0, 0, 0);
-    const sinr_cosp = 2.0 * (q[0] * q[1] + q[2] * q[3]);
-    const cosr_cosp = 1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2]);
-    angles.z = std.math.atan2(c.dReal, sinr_cosp, cosr_cosp);
-
-    const sinp = 2.0 * (q[0] * q[2] - q[3] * q[1]);
-    angles.y = if (std.math.fabs(sinp) >= 1) std.math.copysign(c.dReal, std.math.pi / 2.0, sinp) else std.math.asin(sinp);
-
-    const siny_cosp = 2.0 * (q[0] * q[3] + q[1] * q[2]);
-    const cosy_cosp = 1.0 - 2.0 * (q[2] * q[2] + q[3] * q[3]);
-    angles.x = std.math.atan2(c.dReal, siny_cosp, cosy_cosp);
-
-    return angles;
-}
-
 pub fn rigidbodySystem(query: objects.Query(.{*Rigidbody, *Transform})) !void {
     var iterator = query.iterator();
     while (iterator.next()) |o| {
@@ -177,7 +165,8 @@ pub fn rigidbodySystem(query: objects.Query(.{*Rigidbody, *Transform})) !void {
         const transform = o.transform;
         if (!data.inited) { // TODO: move to a system that uses the Created() filter
             data._body = c.dBodyCreate(data.world.id);
-            const scale = transform.scale;
+
+            // const scale = transform.scale; // not used?
             data._geom = switch (data.collider) {
                 .Box => |box| c.dCreateBox(data.world.space, box.size.x, box.size.y, box.size.z),
                 .Sphere => |sphere| c.dCreateSphere(data.world.space, sphere.radius)
@@ -188,7 +177,7 @@ pub fn rigidbodySystem(query: objects.Query(.{*Rigidbody, *Transform})) !void {
             data.setPosition(transform.position);
             c.dBodySetData(data._body, data);
             c.dBodySetMass(data._body, &data._mass);
-            c.dBodySetDamping(data._body, 0.005, 0.005);
+            //c.dBodySetDamping(data._body, 0.005, 0.005);
             data.inited = true;
         }
         if (c.dBodyIsEnabled(data._body) != 0) {
@@ -197,10 +186,18 @@ pub fn rigidbodySystem(query: objects.Query(.{*Rigidbody, *Transform})) !void {
                 .Kinematic => c.dBodySetKinematic(data._body)
             }
             const scale = transform.scale;
-            //c.dGeomBoxSetLengths(data._geom, scale.x, scale.y, scale.z);
+            switch (data.collider) {
+                .Box => |box| {
+                    c.dGeomBoxSetLengths(data._geom, box.size.x * scale.x, box.size.y * scale.y, box.size.z * scale.z);
+                },
+                .Sphere => |sphere| {
+                    // TODO: handle that
+                    _ = sphere;
+                }
+            }
             const pos = c.dBodyGetPosition(data._body);
             const raw = c.dBodyGetQuaternion(data._body);
-            transform.rotation = zalgebra.quat.new(raw[0], raw[1], raw[2], raw[3]);
+            transform.rotation = zalgebra.Quat.new(raw[0], raw[1], raw[2], raw[3]);
             transform.position = Vec3.new(pos[0], pos[1], pos[2]);
         }
     }

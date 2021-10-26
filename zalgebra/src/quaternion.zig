@@ -3,12 +3,18 @@ const math = std.math;
 const testing = std.testing;
 const assert = std.debug.assert;
 const root = @import("main.zig");
-usingnamespace @import("vec3.zig");
-usingnamespace @import("vec4.zig");
-usingnamespace @import("mat4.zig");
+const vec4 = @import("vec4.zig");
+const vec3 = @import("vec3.zig");
+const mat4 = @import("mat4.zig");
 
-pub const quat = Quaternion(f32);
-pub const quat_f64 = Quaternion(f64);
+const Vec3 = vec3.Vec3;
+const Vector3 = vec3.Vector3;
+const Vec4 = vec4.Vec4;
+const Vector4 = vec4.Vector4;
+const Mat4x4 = mat4.Mat4x4;
+
+pub const Quat = Quaternion(f32);
+pub const Quat_f64 = Quaternion(f64);
 
 /// A Quaternion for 3D rotations.
 pub fn Quaternion(comptime T: type) type {
@@ -41,11 +47,11 @@ pub fn Quaternion(comptime T: type) type {
 
         /// Construct new quaternion from slice.
         /// Note: Careful, the latest component `slice[3]` is the `W` component.
-        pub fn from_slice(slice: []const T) Self {
+        pub fn fromSlice(slice: []const T) Self {
             return Self.new(slice[3], slice[0], slice[1], slice[2]);
         }
 
-        pub fn from_vec3(w: T, axis: Vec3(T)) Self {
+        pub fn fromVec3(w: T, axis: Vector3(T)) Self {
             return .{
                 .w = w,
                 .x = axis.x,
@@ -54,7 +60,7 @@ pub fn Quaternion(comptime T: type) type {
             };
         }
 
-        pub fn is_eq(left: Self, right: Self) bool {
+        pub fn eql(left: Self, right: Self) bool {
             return (left.w == right.w and
                 left.x == right.x and
                 left.y == right.y and
@@ -121,8 +127,8 @@ pub fn Quaternion(comptime T: type) type {
 
         /// Convert given quaternion to rotation 4x4 matrix.
         /// Mostly taken from https://github.com/HandmadeMath/Handmade-Math.
-        pub fn to_mat4(self: Self) Mat4(T) {
-            var result: Mat4(T) = undefined;
+        pub fn toMat4(self: Self) Mat4x4(T) {
+            var result: Mat4x4(T) = undefined;
 
             const normalized = self.norm();
             const xx = normalized.x * normalized.x;
@@ -160,7 +166,7 @@ pub fn Quaternion(comptime T: type) type {
 
         /// From Mike Day at Insomniac Games.
         /// For more details: https://d3cw3dd2w32x2b.cloudfront.net/wp-content/uploads/2015/01/matrix-to-quat.pdf
-        pub fn from_mat4(m: Mat4(T)) Self {
+        pub fn fromMat4(m: Mat4x4(T)) Self {
             var t: f32 = 0;
             var result: Self = undefined;
 
@@ -206,96 +212,200 @@ pub fn Quaternion(comptime T: type) type {
         }
 
         /// Convert all Euler angles to quaternion.
-        pub fn from_euler_angle(axis: Vec3(T)) Self {
-            const x = Self.from_axis(axis.x, vec3.new(1, 0, 0));
-            const y = Self.from_axis(axis.y, vec3.new(0, 1, 0));
-            const z = Self.from_axis(axis.z, vec3.new(0, 0, 1));
+        pub fn fromEulerAngle(axis: Vector3(T)) Self {
+            const x = Self.fromAxis(axis.x, Vec3.new(1, 0, 0));
+            const y = Self.fromAxis(axis.y, Vec3.new(0, 1, 0));
+            const z = Self.fromAxis(axis.z, Vec3.new(0, 0, 1));
 
             return z.mult(y.mult(x));
         }
 
         /// Convert Euler angle around specified axis to quaternion.
-        pub fn from_axis(degrees: T, axis: Vec3(T)) Self {
-            const radians = root.to_radians(degrees);
+        pub fn fromAxis(degrees: T, axis: Vector3(T)) Self {
+            const radians = root.toRadians(degrees);
 
             const rot_sin = math.sin(radians / 2.0);
             const quat_axis = axis.norm().scale(rot_sin);
             const w = math.cos(radians / 2.0);
 
-            return Self.from_vec3(w, quat_axis);
+            return Self.fromVec3(w, quat_axis);
         }
 
         /// Extract euler angles from quaternion.
-        pub fn extract_rotation(self: Self) Vec3(T) {
-            const yaw = math.atan2(T, 2.0 * (self.y * self.z + self.w * self.x), self.w * self.w - self.x * self.x - self.y * self.y + self.z * self.z);
-            const pitch = math.asin(-2.0 * (self.x * self.z - self.w * self.y));
-            const roll = math.atan2(T, 2.0 * (self.x * self.y + self.w * self.z), self.w * self.w + self.x * self.x - self.y * self.y - self.z * self.z);
+        pub fn extractRotation(self: Self) Vector3(T) {
+            const yaw = math.atan2(
+                T,
+                2.0 * (self.y * self.z + self.w * self.x),
+                self.w * self.w - self.x * self.x - self.y * self.y + self.z * self.z,
+            );
+            const pitch = math.asin(
+                -2.0 * (self.x * self.z - self.w * self.y),
+            );
+            const roll = math.atan2(
+                T,
+                2.0 * (self.x * self.y + self.w * self.z),
+                self.w * self.w + self.x * self.x - self.y * self.y - self.z * self.z,
+            );
 
-            return Vec3(T).new(root.to_degrees(yaw), root.to_degrees(pitch), root.to_degrees(roll));
+            return Vector3(T).new(root.toDegrees(yaw), root.toDegrees(pitch), root.toDegrees(roll));
+        }
+
+        /// Lerp between two quaternions.
+        pub fn lerp(left: Self, right: Self, t: f32) Self {
+            const w = root.lerp(T, left.w, right.w, t);
+            const x = root.lerp(T, left.x, right.x, t);
+            const y = root.lerp(T, left.y, right.y, t);
+            const z = root.lerp(T, left.z, right.z, t);
+            return Self.new(w, x, y, z);
+        }
+
+        // Shortest path slerp between two quaternions.
+        // Taken from "Physically Based Rendering, 3rd Edition, Chapter 2.9.2"
+        // https://pbr-book.org/3ed-2018/Geometry_and_Transformations/Animating_Transformations#QuaternionInterpolation
+        pub fn slerp(left: Self, right: Self, t: f32) Self {
+            const ParallelThreshold: f32 = 0.9995;
+            var cos_theta = dot(left, right);
+            var right1 = right;
+
+            // We need the absolute value of the dot product to take the shortest path
+            if (cos_theta < 0.0) {
+                cos_theta *= -1;
+                right1 = right.scale(-1);
+            }
+
+            if (cos_theta > ParallelThreshold) {
+                // Use regular old lerp to avoid numerical instability
+                return lerp(left, right1, t);
+            } else {
+                var theta = math.acos(math.clamp(cos_theta, -1, 1));
+                var thetap = theta * t;
+                var qperp = right1.sub(left.scale(cos_theta)).norm();
+                return left.scale(math.cos(thetap)).add(qperp.scale(math.sin(thetap)));
+            }
+        }
+
+        /// Rotate the vector v using the sandwich product.
+        /// Taken from "Foundations of Game Engine Development Vol. 1 Mathematics".
+        pub fn rotateVec(self: Self, v: Vector3(T)) Vector3(T) {
+            const q = self.norm();
+            const b = Vector3(T).new(q.x, q.y, q.z);
+            const b2 = b.x * b.x + b.y * b.y + b.z * b.z;
+
+            return v.scale(q.w * q.w - b2).add(b.scale(v.dot(b) * 2.0)).add(b.cross(v).scale(q.w * 2.0));
         }
     };
 }
 
 test "zalgebra.Quaternion.new" {
-    const q = quat.new(1.5, 2.6, 3.7, 4.7);
+    const q = Quat.new(1.5, 2.6, 3.7, 4.7);
 
-    testing.expectEqual(q.w, 1.5);
-    testing.expectEqual(q.x, 2.6);
-    testing.expectEqual(q.y, 3.7);
-    testing.expectEqual(q.z, 4.7);
+    try testing.expectEqual(q.w, 1.5);
+    try testing.expectEqual(q.x, 2.6);
+    try testing.expectEqual(q.y, 3.7);
+    try testing.expectEqual(q.z, 4.7);
 }
 
-test "zalgebra.Quaternion.from_slice" {
+test "zalgebra.Quaternion.fromSlice" {
     const array = [4]f32{ 2, 3, 4, 1 };
-    testing.expectEqual(quat.is_eq(quat.from_slice(&array), quat.new(1, 2, 3, 4)), true);
+    try testing.expectEqual(Quat.eql(Quat.fromSlice(&array), Quat.new(1, 2, 3, 4)), true);
 }
 
-test "zalgebra.Quaternion.from_vec3" {
-    const q = quat.from_vec3(1.5, vec3.new(2.6, 3.7, 4.7));
+test "zalgebra.Quaternion.fromVec3" {
+    const q = Quat.fromVec3(1.5, Vec3.new(2.6, 3.7, 4.7));
 
-    testing.expectEqual(q.w, 1.5);
-    testing.expectEqual(q.x, 2.6);
-    testing.expectEqual(q.y, 3.7);
-    testing.expectEqual(q.z, 4.7);
+    try testing.expectEqual(q.w, 1.5);
+    try testing.expectEqual(q.x, 2.6);
+    try testing.expectEqual(q.y, 3.7);
+    try testing.expectEqual(q.z, 4.7);
 }
 
-test "zalgebra.Quaternion.from_vec3" {
-    const q1 = quat.from_vec3(1.5, vec3.new(2.6, 3.7, 4.7));
-    const q2 = quat.from_vec3(1.5, vec3.new(2.6, 3.7, 4.7));
-    const q3 = quat.from_vec3(1., vec3.new(2.6, 3.7, 4.7));
+test "zalgebra.Quaternion.fromVec3" {
+    const q1 = Quat.fromVec3(1.5, Vec3.new(2.6, 3.7, 4.7));
+    const q2 = Quat.fromVec3(1.5, Vec3.new(2.6, 3.7, 4.7));
+    const q3 = Quat.fromVec3(1, Vec3.new(2.6, 3.7, 4.7));
 
-    testing.expectEqual(q1.is_eq(q2), true);
-    testing.expectEqual(q1.is_eq(q3), false);
+    try testing.expectEqual(q1.eql(q2), true);
+    try testing.expectEqual(q1.eql(q3), false);
 }
 
 test "zalgebra.Quaternion.norm" {
-    const q1 = quat.from_vec3(1., vec3.new(2., 2.0, 2.0));
-    const q2 = quat.from_vec3(0.2773500978946686, vec3.new(0.5547001957893372, 0.5547001957893372, 0.5547001957893372));
+    const q1 = Quat.fromVec3(1, Vec3.new(2, 2.0, 2.0));
+    const q2 = Quat.fromVec3(0.2773500978946686, Vec3.new(0.5547001957893372, 0.5547001957893372, 0.5547001957893372));
 
-    testing.expectEqual(q1.norm().is_eq(q2), true);
+    try testing.expectEqual(q1.norm().eql(q2), true);
 }
 
-test "zalgebra.Quaternion.from_euler_angle" {
-    const q1 = quat.from_euler_angle(vec3.new(10, 5, 45));
-    const res_q1 = q1.extract_rotation();
+test "zalgebra.Quaternion.fromEulerAngle" {
+    const q1 = Quat.fromEulerAngle(Vec3.new(10, 5, 45));
+    const res_q1 = q1.extractRotation();
 
-    const q2 = quat.from_euler_angle(vec3.new(0, 55, 22));
-    const res_q2 = q2.to_mat4().extract_rotation();
+    const q2 = Quat.fromEulerAngle(Vec3.new(0, 55, 22));
+    const res_q2 = q2.toMat4().extractRotation();
 
-    testing.expectEqual(vec3.is_eq(res_q1, vec3.new(9.999999046325684, 5.000000476837158, 45)), true);
-    testing.expectEqual(vec3.is_eq(res_q2, vec3.new(0, 47.245025634765625, 22)), true);
+    try testing.expectEqual(Vec3.eql(res_q1, Vec3.new(9.999999046325684, 5.000000476837158, 45)), true);
+    try testing.expectEqual(Vec3.eql(res_q2, Vec3.new(0, 47.245025634765625, 22)), true);
 }
 
-test "zalgebra.Quaternion.from_axis" {
-    const q1 = quat.from_axis(45, vec3.new(0, 1, 0));
-    const res_q1 = q1.extract_rotation();
+test "zalgebra.Quaternion.fromAxis" {
+    const q1 = Quat.fromAxis(45, Vec3.new(0, 1, 0));
+    const res_q1 = q1.extractRotation();
 
-    testing.expectEqual(vec3.is_eq(res_q1, vec3.new(0, 45.0000076, 0)), true);
+    try testing.expectEqual(Vec3.eql(res_q1, Vec3.new(0, 45.0000076, 0)), true);
 }
 
-test "zalgebra.Quaternion.extract_rotation" {
-    const q1 = quat.from_vec3(0.5, vec3.new(0.5, 1, 0.3));
-    const res_q1 = q1.extract_rotation();
+test "zalgebra.Quaternion.extractRotation" {
+    const q1 = Quat.fromVec3(0.5, Vec3.new(0.5, 1, 0.3));
+    const res_q1 = q1.extractRotation();
 
-    testing.expectEqual(vec3.is_eq(res_q1, vec3.new(129.6000213623047, 44.427005767822266, 114.41073608398438)), true);
+    try testing.expectEqual(Vec3.eql(res_q1, Vec3.new(129.6000213623047, 44.427005767822266, 114.41073608398438)), true);
+}
+
+test "zalgebra.Quaternion.rotateVec" {
+    const eps_value = comptime std.math.epsilon(f32);
+    const q = Quat.fromEulerAngle(Vec3.new(45, 45, 45));
+    const m = q.toMat4();
+
+    const v = Vec3.new(0, 1, 0);
+    const v1 = q.rotateVec(v);
+    const v2 = m.multByVec4(Vec4.new(v.x, v.y, v.z, 1.0));
+
+    try testing.expect(std.math.approxEqAbs(f32, v1.x, -1.46446585e-01, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v1.y, 8.53553473e-01, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v1.z, 0.5, eps_value));
+
+    try testing.expect(std.math.approxEqAbs(f32, v1.x, v2.x, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v1.y, v2.y, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v1.z, v2.z, eps_value));
+}
+
+test "zalgebra.Quaternion.lerp" {
+    const eps_value = comptime std.math.epsilon(f32);
+    var v1 = Quat.zero();
+    var v2 = Quat.fromAxis(180, Vec3.up());
+    try testing.expectEqual(Quat.eql(
+        Quat.lerp(v1, v2, 1.0),
+        v2,
+    ), true);
+    var v3 = Quat.lerp(v1, v2, 0.5);
+    var v4 = Quat.new(4.99999970e-01, 0, 4.99999970e-01, 0);
+    try testing.expect(std.math.approxEqAbs(f32, v3.w, v4.w, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v3.x, v4.x, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v3.y, v4.y, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v3.z, v4.z, eps_value));
+}
+
+test "zalgebra.Quaternion.slerp" {
+    const eps_value = comptime std.math.epsilon(f32);
+    var v1 = Quat.zero();
+    var v2 = Quat.fromAxis(180, Vec3.up());
+    try testing.expectEqual(Quat.eql(
+        Quat.slerp(v1, v2, 1.0),
+        Quat.new(7.54979012e-08, 0, -1, 0),
+    ), true);
+    var v3 = Quat.slerp(v1, v2, 0.5);
+    var v4 = Quat.new(7.071067e-01, 0, -7.071067e-01, 0);
+    try testing.expect(std.math.approxEqAbs(f32, v3.w, v4.w, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v3.x, v4.x, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v3.y, v4.y, eps_value));
+    try testing.expect(std.math.approxEqAbs(f32, v3.z, v4.z, eps_value));
 }

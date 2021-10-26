@@ -1,21 +1,35 @@
 const std = @import("std");
 const zalgebra = @import("zalgebra");
 const physics = @import("didot-physics");
-const Vec3 = zalgebra.vec3;
-const Quat = zalgebra.quat;
+const Vec3 = zalgebra.Vec3;
+const Quat = zalgebra.Quat;
 const Allocator = std.mem.Allocator;
 const rad = zalgebra.to_radians;
 
-usingnamespace @import("didot-graphics");
-usingnamespace @import("didot-objects");
-usingnamespace @import("didot-app");
+const graphics = @import("didot-graphics");
+const objects = @import("didot-objects");
+const Scene = objects.Scene;
+const Input = graphics.Input;
+const Transform = objects.Transform;
+const Camera = objects.Camera;
+const Query = objects.Query;
+const ShaderProgram = graphics.ShaderProgram;
+const GameObject = objects.GameObject;
+const TextureAsset = graphics.TextureAsset;
+const Material = graphics.Material;
+const Skybox = objects.Skybox;
+const PointLight = objects.PointLight;
+
+pub const log = @import("didot-app").log;
+const Systems = @import("didot-app").Systems;
+const Application = @import("didot-app").Application;
 
 var world: physics.World = undefined;
 var scene: *Scene = undefined;
 
 //pub const io_mode = .evented;
 
-const App = comptime blk: {
+const App = blk: {
     comptime var systems = Systems {};
     systems.addSystem(update);
     systems.addSystem(testSystem);
@@ -39,13 +53,13 @@ fn cameraSystem(controller: *CameraController, transform: *Transform) !void {
 
     if (input.getMouseInputMode() == .Grabbed) {
         const delta = 1.0; // TODO: put delta in Application struct
-        var euler = transform.rotation.extract_rotation();
+        var euler = transform.rotation.extractRotation();
         euler.x += (input.mouseDelta.x / 3.0) * delta;
         euler.y -= (input.mouseDelta.y / 3.0) * delta;
         if (euler.y > 89) euler.y = 89;
         if (euler.y < -89) euler.y = -89;
 
-        transform.rotation = Quat.from_euler_angle(euler);
+        transform.rotation = Quat.fromEulerAngle(euler);
     }
 }
 
@@ -100,7 +114,7 @@ fn loadSkybox(allocator: *Allocator, camera: *Camera) !void {
 fn testSystem(query: Query(.{})) !void {
     var iter = query.iterator();
     while (iter.next()) |go| {
-
+        _ = go;
     }
 }
 
@@ -140,7 +154,7 @@ fn init(allocator: *Allocator, app: *App) !void {
     try camera.addComponent(Camera { .shader = shader });
     camera.getComponent(Transform).?.* = .{
         .position = Vec3.new(1.5, 3.5, -0.5),
-        .rotation = Quat.from_euler_angle(Vec3.new(-120, -15, 0))
+        .rotation = Quat.fromEulerAngle(Vec3.new(-120, -15, 0))
     };
     camera.name = "Camera";
     try camera.addComponent(CameraController {
@@ -157,20 +171,34 @@ fn init(allocator: *Allocator, app: *App) !void {
         .scale = Vec3.new(250, 0.1, 250)
     };
     cube.material = concreteMaterial;
-    try cube.addComponent(physics.Rigidbody { .world=&world, .kinematic=.Kinematic,
-        .collider = .{ .Box = .{ .size = Vec3.new(250, 0.1, 250) }}});
+    try cube.addComponent(physics.Rigidbody {
+        .world=&world,
+        .kinematic=.Kinematic,
+        .collider = .{
+            .Box = .{}
+        },
+        .material = .{
+            .friction = 10
+        }
+    });
     try scene.add(cube);
 
-    var cube2 = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
-    cube2.getComponent(Transform).?.* = .{
-        .position = Vec3.new(-1.2, 5.75, -3),
-        .scale = Vec3.new(1, 2, 1)
-    };
-    cube2.material.ambient = Vec3.new(0.2, 0.1, 0.1);
-    cube2.material.diffuse = Vec3.new(0.8, 0.8, 0.8);
-    try cube2.addComponent(physics.Rigidbody { .world = &world,
-        .collider = .{ .Box = .{ .size = Vec3.new(1, 2, 1) }}});
-    try scene.add(cube2);
+    var i: usize = 0;
+
+    var rand = std.rand.DefaultPrng.init(145115126);
+    var random = rand.random;
+    while (i < 50) : (i += 1) {
+        var domino = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
+        domino.getComponent(Transform).?.* = .{
+            .position = Vec3.new(-1.2, 0.75, -3 - (1.3 * @intToFloat(f32, i))),
+            .scale = Vec3.new(1, 2, 0.1)
+        };
+        domino.material.ambient = Vec3.new(random.float(f32) * 0.1, random.float(f32) * 0.1, random.float(f32) * 0.1);
+        domino.material.diffuse = Vec3.new(random.float(f32), random.float(f32), random.float(f32));
+        try domino.addComponent(physics.Rigidbody { .world = &world,
+            .collider = .{ .Box = .{} }});
+        try scene.add(domino);
+    }
 
     var light = try GameObject.createObject(allocator, asset.get("Mesh/Cube"));
     light.getComponent(Transform).?.position = Vec3.new(1, 5, -5);
